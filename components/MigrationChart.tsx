@@ -294,6 +294,7 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
               animationDuration={1000}
             />
             
+            {/* Fix: Removed 'backgroundColor' which is not supported in ReferenceLine label object */}
             <ReferenceLine 
               yAxisId="right"
               y={currentPrice} 
@@ -305,7 +306,6 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
                 fontSize: 12, 
                 position: 'insideRight',
                 fontWeight: '900',
-                backgroundColor: '#f43f5e',
                 dy: -10
               }} 
             />
