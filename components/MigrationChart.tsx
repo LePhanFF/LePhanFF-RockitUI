@@ -9,31 +9,47 @@ import {
   Tooltip, 
   ResponsiveContainer,
   ReferenceLine,
-  Brush,
+  ReferenceArea,
   Bar,
   Cell,
-  Line
+  Line,
+  Brush
 } from 'recharts';
-import { DPOCSlice, ProfileSet } from '../types';
+import { DPOCSlice, FVG } from '../types';
 
 interface MigrationChartProps {
-  data: DPOCSlice[];
+  data: any[];
   currentPrice: number;
   showOHLC: boolean;
   showVWAP: boolean;
   showEMA: boolean;
-  showVP: boolean;
-  isWideView: boolean;
-  currentVP?: ProfileSet;
+  showInstitutional: boolean;
+  showIB: boolean;
+  showProfile: boolean;
+  showFVG: boolean;
   levels: {
     asia_high: number;
     asia_low: number;
     london_high: number;
     london_low: number;
+    overnight_high: number;
+    overnight_low: number;
     previous_day_high: number;
     previous_day_low: number;
     previous_week_high: number;
     previous_week_low: number;
+  };
+  profileLevels: {
+    vah: number;
+    poc: number;
+    val: number;
+  };
+  fvgData?: {
+    daily_fvg: FVG[];
+    "4h_fvg": FVG[];
+    "1h_fvg": FVG[];
+    "15min_fvg": FVG[];
+    "5min_fvg": FVG[];
   };
 }
 
@@ -42,285 +58,208 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
   currentPrice, 
   showOHLC, 
   showVWAP, 
-  showEMA, 
-  showVP,
-  isWideView,
-  currentVP,
-  levels 
+  showEMA,
+  showInstitutional,
+  showIB,
+  showProfile,
+  showFVG,
+  levels,
+  profileLevels,
+  fvgData 
 }) => {
   const sessionData = useMemo(() => {
-    return data
+    return (data || [])
       .filter(d => {
-        const [hours, minutes] = d.time.split(':').map(Number);
-        return hours > 9 || (hours === 9 && minutes >= 30);
+        if (!d.time) return false;
+        const [hours] = d.time.split(':').map(Number);
+        return hours >= 8; // Session Focus
       })
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [data]);
 
   const yDomain = useMemo(() => {
-    const allValues = [
+    const allValues: number[] = [
       ...sessionData.map(d => d.dpoc),
       ...sessionData.map(d => d.high || d.dpoc),
       ...sessionData.map(d => d.low || d.dpoc),
       currentPrice,
-      levels.asia_high, levels.asia_low,
-      levels.london_high, levels.london_low,
-      levels.previous_day_high, levels.previous_day_low
-    ];
-
-    if (isWideView) {
-      allValues.push(levels.previous_week_high, levels.previous_week_low);
-    }
-
-    if (showVWAP) sessionData.forEach(d => d.vwap && allValues.push(d.vwap));
-    if (showEMA) {
-      sessionData.forEach(d => {
-        if (d.ema20) allValues.push(d.ema20);
-        if (d.ema50) allValues.push(d.ema50);
-        if (d.ema200) allValues.push(d.ema200);
-      });
-    }
-    if (showVP && currentVP) {
-      allValues.push(currentVP.poc, currentVP.vah, currentVP.val);
-      currentVP.hvn_nodes.forEach(v => allValues.push(v));
-      currentVP.lvn_nodes.forEach(v => allValues.push(v));
-    }
-
-    const validValues = allValues.filter(v => v !== undefined && !isNaN(v) && v !== 0);
-    const min = Math.min(...validValues);
-    const max = Math.max(...validValues);
-    const range = max - min;
+    ].filter(v => typeof v === 'number' && !isNaN(v) && v !== 0);
     
-    // Zoom behavior: If Wide View is on, we double the padding percentage
-    const paddingMult = isWideView ? 0.4 : 0.1;
-    const padding = range * paddingMult || 20;
+    if (showInstitutional) {
+      const inst = [levels.asia_high, levels.asia_low, levels.london_high, levels.london_low, levels.overnight_high, levels.overnight_low];
+      allValues.push(...inst.filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
+    }
+
+    if (showIB) {
+       allValues.push(...sessionData.map(d => d.ibh).filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
+       allValues.push(...sessionData.map(d => d.ibl).filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
+    }
     
+    if (showProfile) {
+      const prof = [profileLevels.vah, profileLevels.poc, profileLevels.val];
+      allValues.push(...prof.filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
+    }
+
+    if (allValues.length === 0) return [0, 100];
+    
+    const min = Math.min(...allValues);
+    const max = Math.max(...allValues);
+    const padding = (max - min) * 0.1 || 20;
     return [min - padding, max + padding];
-  }, [sessionData, currentPrice, levels, showVWAP, showEMA, showVP, isWideView, currentVP]);
+  }, [sessionData, currentPrice, levels, profileLevels, showInstitutional, showIB, showProfile]);
 
-  if (sessionData.length === 0) {
-    return (
-      <div className="h-full w-full flex items-center justify-center italic text-slate-500 font-black uppercase tracking-[0.3em] text-lg bg-slate-900/10">
-        Engine Initializing (09:30 AM)...
-      </div>
-    );
-  }
+  const activeFvgs = useMemo(() => {
+    if (!fvgData || !showFVG) return [];
+    return [
+      ...(fvgData["1h_fvg"] || []).map(f => ({ ...f, timeframe: '1H' })),
+      ...(fvgData["15min_fvg"] || []).map(f => ({ ...f, timeframe: '15M' })),
+      ...(fvgData["5min_fvg"] || []).map(f => ({ ...f, timeframe: '5M' }))
+    ];
+  }, [fvgData, showFVG]);
+
+  if (sessionData.length === 0) return (
+    <div className="h-full w-full flex items-center justify-center italic text-slate-700 font-black uppercase tracking-widest bg-slate-950/20">
+      Awaiting Market Intelligence...
+    </div>
+  );
 
   return (
-    <div className="h-full w-full flex flex-col p-2">
-      <div className="flex-1 group select-none relative">
-        <div className="absolute top-2 right-16 z-10 flex flex-wrap gap-3 bg-slate-950/80 backdrop-blur-xl p-2 rounded-xl border border-slate-800 text-[9px] font-black uppercase tracking-[0.1em] shadow-2xl max-w-[280px] sm:max-w-none">
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-0.5 bg-amber-500 rounded-full"></div><span className="text-amber-500/80">Asia</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-0.5 bg-sky-400 rounded-full"></div><span className="text-sky-400/80">London</span></div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-0.5 bg-slate-500 rounded-full"></div><span className="text-slate-500">PDH/L</span></div>
-          {isWideView && (
-            <div className="flex items-center gap-1.5"><div className="w-2.5 h-0.5 bg-rose-400 rounded-full"></div><span className="text-rose-400">PWH/L</span></div>
-          )}
-          <div className="flex items-center gap-1.5 border-l border-slate-800 pl-3"><div className="w-2.5 h-0.5 bg-indigo-500 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div><span className="text-indigo-400">DPOC</span></div>
-          
-          {showVWAP && (
-            <div className="flex items-center gap-1.5 border-l border-slate-800 pl-3">
-              <div className="w-2.5 h-0.5 bg-amber-400 rounded-full"></div>
-              <span className="text-amber-400/80">VWAP</span>
-            </div>
-          )}
-          
-          {showEMA && (
-            <div className="flex items-center gap-3 border-l border-slate-800 pl-3">
-              <div className="flex items-center gap-1"><div className="w-2 h-0.5 bg-cyan-400"></div><span className="text-cyan-400/70">20</span></div>
-              <div className="flex items-center gap-1"><div className="w-2 h-0.5 bg-indigo-400"></div><span className="text-indigo-400/70">50</span></div>
-              <div className="flex items-center gap-1"><div className="w-2 h-0.5 bg-fuchsia-400"></div><span className="text-fuchsia-400/70">200</span></div>
-            </div>
-          )}
-
-          {showVP && (
-            <div className="flex items-center gap-3 border-l border-slate-800 pl-3">
-               <div className="flex items-center gap-1"><div className="w-2 h-0.5 bg-indigo-500"></div><span className="text-indigo-400/70">VA/POC</span></div>
-               <div className="flex items-center gap-1"><div className="w-2 h-0.5 bg-emerald-500"></div><span className="text-emerald-400/70">HVN</span></div>
-               <div className="flex items-center gap-1"><div className="w-2 h-0.5 bg-rose-500"></div><span className="text-rose-400/70">LVN</span></div>
-            </div>
-          )}
-        </div>
-
+    <div className="h-full w-full flex flex-col p-1">
+      <div className="flex-1 select-none relative">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={sessionData} margin={{ top: 60, right: 80, left: 60, bottom: 10 }}>
+          <ComposedChart data={sessionData} margin={{ top: 10, right: 80, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="colorDpoc" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
+                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="6 6" stroke="#1e293b" vertical={false} strokeOpacity={0.3} />
-            
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} strokeOpacity={0.08} />
             <XAxis 
               dataKey="time" 
               stroke="#64748b" 
-              fontSize={11} 
-              fontWeight={800}
-              tickMargin={10}
-              axisLine={false}
-              tickLine={false}
+              fontSize={9} 
+              fontWeight={900} 
+              axisLine={false} 
+              tickLine={false} 
+              interval="preserveStartEnd"
             />
-            
             <YAxis 
-              yAxisId="right"
+              yAxisId="right" 
               domain={yDomain} 
               stroke="#94a3b8" 
-              fontSize={12} 
-              fontWeight={900}
-              orientation="right"
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(val) => val.toLocaleString()}
-            />
-
-            <YAxis 
-              yAxisId="left"
-              domain={yDomain} 
-              stroke="transparent" 
               fontSize={11} 
-              fontWeight={900}
-              orientation="left"
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={() => ""}
+              fontWeight={900} 
+              orientation="right" 
+              axisLine={false} 
+              tickLine={false} 
+              tickFormatter={(val) => val.toFixed(0)} 
             />
-
+            
             <Tooltip 
-              contentStyle={{ 
-                backgroundColor: '#020617', 
-                border: '1px solid #1e293b',
-                borderRadius: '12px',
-                fontSize: '11px',
-                fontWeight: '800',
-                padding: '12px',
-                boxShadow: '0 20px 40px -10px rgba(0, 0, 0, 0.8)'
-              }}
-              itemStyle={{ padding: '1px 0' }}
-              labelStyle={{ color: '#64748b', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.1em' }}
-              cursor={{ stroke: '#334155', strokeWidth: 1 }}
+              contentStyle={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', fontSize: '11px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' }}
+              itemStyle={{ fontWeight: 900 }}
             />
 
-            {/* Session Levels - Labels moved to LEFT */}
-            <ReferenceLine yAxisId="right" y={levels.asia_high} stroke="#f59e0b" strokeWidth={1} strokeDasharray="4 4" strokeOpacity={0.4} label={{ position: 'left', value: 'AH', fill: '#f59e0b', fontSize: 10, fontWeight: 900, dx: -5 }} />
-            <ReferenceLine yAxisId="right" y={levels.asia_low} stroke="#f59e0b" strokeWidth={1} strokeDasharray="4 4" strokeOpacity={0.4} label={{ position: 'left', value: 'AL', fill: '#f59e0b', fontSize: 10, fontWeight: 900, dx: -5 }} />
-            <ReferenceLine yAxisId="right" y={levels.london_high} stroke="#38bdf8" strokeWidth={1} strokeDasharray="4 4" strokeOpacity={0.4} label={{ position: 'left', value: 'LH', fill: '#38bdf8', fontSize: 10, fontWeight: 900, dx: -5 }} />
-            <ReferenceLine yAxisId="right" y={levels.london_low} stroke="#38bdf8" strokeWidth={1} strokeDasharray="4 4" strokeOpacity={0.4} label={{ position: 'left', value: 'LL', fill: '#38bdf8', fontSize: 10, fontWeight: 900, dx: -5 }} />
-            <ReferenceLine yAxisId="right" y={levels.previous_day_high} stroke="#94a3b8" strokeWidth={1.5} strokeOpacity={0.5} label={{ position: 'left', value: 'PDH', fill: '#cbd5e1', fontSize: 10, fontWeight: 900, dx: -5 }} />
-            <ReferenceLine yAxisId="right" y={levels.previous_day_low} stroke="#94a3b8" strokeWidth={1.5} strokeOpacity={0.5} label={{ position: 'left', value: 'PDL', fill: '#cbd5e1', fontSize: 10, fontWeight: 900, dx: -5 }} />
+            {showFVG && activeFvgs.map((fvg, i) => (
+              <ReferenceArea 
+                key={`fvg-${i}`} 
+                yAxisId="right" 
+                y1={fvg.bottom} 
+                y2={fvg.top} 
+                fill={fvg.type === 'bullish' ? '#10b981' : '#f43f5e'} 
+                fillOpacity={0.5} 
+                stroke={fvg.type === 'bullish' ? '#10b981' : '#f43f5e'}
+                strokeOpacity={0.9}
+                strokeWidth={2}
+              />
+            ))}
 
-            {/* Weekly Footprints (Only in Wide View) */}
-            {isWideView && (
+            {showInstitutional && (
               <>
-                <ReferenceLine yAxisId="right" y={levels.previous_week_high} stroke="#fb7185" strokeWidth={1.5} strokeOpacity={0.6} label={{ position: 'left', value: 'PWH', fill: '#fb7185', fontSize: 10, fontWeight: 900, dx: -5 }} />
-                <ReferenceLine yAxisId="right" y={levels.previous_week_low} stroke="#fb7185" strokeWidth={1.5} strokeOpacity={0.6} label={{ position: 'left', value: 'PWL', fill: '#fb7185', fontSize: 10, fontWeight: 900, dx: -5 }} />
+                <ReferenceLine yAxisId="right" y={levels.asia_high} stroke="#fbbf24" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'ASIA H', position: 'insideRight', fill: '#fbbf24', fontSize: 8, fontWeight: 900 }} />
+                <ReferenceLine yAxisId="right" y={levels.asia_low} stroke="#fbbf24" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'ASIA L', position: 'insideRight', fill: '#fbbf24', fontSize: 8, fontWeight: 900 }} />
+                
+                <ReferenceLine yAxisId="right" y={levels.london_high} stroke="#38bdf8" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'LON H', position: 'insideRight', fill: '#38bdf8', fontSize: 8, fontWeight: 900 }} />
+                <ReferenceLine yAxisId="right" y={levels.london_low} stroke="#38bdf8" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'LON L', position: 'insideRight', fill: '#38bdf8', fontSize: 8, fontWeight: 900 }} />
+
+                <ReferenceLine yAxisId="right" y={levels.overnight_high} stroke="#818cf8" strokeWidth={1} strokeDasharray="6 3" strokeOpacity={0.6} label={{ value: 'ON H', position: 'insideRight', fill: '#818cf8', fontSize: 8, fontWeight: 900 }} />
+                <ReferenceLine yAxisId="right" y={levels.overnight_low} stroke="#818cf8" strokeWidth={1} strokeDasharray="6 3" strokeOpacity={0.6} label={{ value: 'ON L', position: 'insideRight', fill: '#818cf8', fontSize: 8, fontWeight: 900 }} />
               </>
             )}
 
-            {/* Volume Profile Levels - Labels moved to LEFT */}
-            {showVP && currentVP && (
+            {showIB && (
               <>
-                <ReferenceLine yAxisId="right" y={currentVP.vah} stroke="#6366f1" strokeWidth={1} strokeDasharray="4 4" label={{ position: 'left', value: 'VAH', fill: '#818cf8', fontSize: 10, fontWeight: 900, dx: -5 }} />
-                <ReferenceLine yAxisId="right" y={currentVP.poc} stroke="#6366f1" strokeWidth={2} label={{ position: 'left', value: 'VPOC', fill: '#818cf8', fontSize: 10, fontWeight: 900, dx: -5 }} />
-                <ReferenceLine yAxisId="right" y={currentVP.val} stroke="#6366f1" strokeWidth={1} strokeDasharray="4 4" label={{ position: 'left', value: 'VAL', fill: '#818cf8', fontSize: 10, fontWeight: 900, dx: -5 }} />
-                {currentVP.hvn_nodes.map((hvn, i) => (
-                  <ReferenceLine yAxisId="right" key={`hvn-${i}`} y={hvn} stroke="#10b981" strokeWidth={0.75} strokeDasharray="8 4 1 4" strokeOpacity={0.8} />
-                ))}
-                {currentVP.lvn_nodes.map((lvn, i) => (
-                  <ReferenceLine yAxisId="right" key={`lvn-${i}`} y={lvn} stroke="#f43f5e" strokeWidth={0.75} strokeDasharray="8 4 1 4" strokeOpacity={0.8} />
-                ))}
+                <Line yAxisId="right" type="stepAfter" dataKey="ibh" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} strokeOpacity={0.8} />
+                <Line yAxisId="right" type="stepAfter" dataKey="ibl" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} strokeOpacity={0.8} />
+                <ReferenceLine yAxisId="right" y={sessionData[sessionData.length-1]?.ibh} stroke="transparent" label={{ value: 'IBH', position: 'insideRight', fill: '#f59e0b', fontSize: 8, fontWeight: 900 }} />
+                <ReferenceLine yAxisId="right" y={sessionData[sessionData.length-1]?.ibl} stroke="transparent" label={{ value: 'IBL', position: 'insideRight', fill: '#f59e0b', fontSize: 8, fontWeight: 900 }} />
+              </>
+            )}
+
+            {showProfile && (
+              <>
+                <ReferenceLine yAxisId="right" y={profileLevels.vah} stroke="#a5b4fc" strokeWidth={2} strokeOpacity={0.8} label={{ value: 'VAH', position: 'insideLeft', fill: '#a5b4fc', fontSize: 9, fontWeight: 900 }} />
+                <ReferenceLine yAxisId="right" y={profileLevels.poc} stroke="#6366f1" strokeWidth={3} strokeOpacity={0.9} label={{ value: 'POC', position: 'insideLeft', fill: '#818cf8', fontSize: 10, fontWeight: 900 }} />
+                <ReferenceLine yAxisId="right" y={profileLevels.val} stroke="#a5b4fc" strokeWidth={2} strokeOpacity={0.8} label={{ value: 'VAL', position: 'insideLeft', fill: '#a5b4fc', fontSize: 9, fontWeight: 900 }} />
               </>
             )}
 
             {showVWAP && (
-              <Line 
-                yAxisId="right"
-                type="monotone" 
-                dataKey="vwap" 
-                stroke="#fbbf24" 
-                strokeWidth={2} 
-                dot={false} 
-                animationDuration={500}
-                strokeDasharray="5 5"
-              />
+              <Line yAxisId="right" type="monotone" dataKey="vwap" stroke="#fbbf24" strokeWidth={2} dot={false} strokeDasharray="3 3" strokeOpacity={0.9} />
             )}
-
+            
             {showEMA && (
               <>
-                <Line yAxisId="right" type="monotone" dataKey="ema20" stroke="#22d3ee" strokeWidth={1.5} dot={false} animationDuration={600} />
-                <Line yAxisId="right" type="monotone" dataKey="ema50" stroke="#818cf8" strokeWidth={1.5} dot={false} animationDuration={700} />
-                <Line yAxisId="right" type="monotone" dataKey="ema200" stroke="#e879f9" strokeWidth={2} dot={false} animationDuration={800} />
+                <Line yAxisId="right" type="monotone" dataKey="ema20" stroke="#22d3ee" strokeWidth={1.5} dot={false} strokeOpacity={0.7} />
+                <Line yAxisId="right" type="monotone" dataKey="ema50" stroke="#0ea5e9" strokeWidth={1.5} dot={false} strokeOpacity={0.7} />
               </>
             )}
 
             {showOHLC && (
-              <>
-                <Bar 
-                  yAxisId="right"
-                  dataKey={(d: any) => [d.low, d.high]} 
-                  fill="#475569" 
-                  barSize={1} 
-                  isAnimationActive={false}
-                  tooltipType="none"
-                />
-                <Bar 
-                  yAxisId="right"
-                  dataKey={(d: any) => [d.open, d.close]} 
-                  isAnimationActive={true}
-                  barSize={8}
-                >
-                  {sessionData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={(entry.close || 0) >= (entry.open || 0) ? '#10b981' : '#f43f5e'} 
-                      stroke={(entry.close || 0) >= (entry.open || 0) ? '#34d399' : '#fb7185'}
-                      strokeWidth={0.5}
-                    />
-                  ))}
-                </Bar>
-              </>
+              <Bar yAxisId="right" dataKey={(d: any) => [d.open, d.close]} barSize={6}>
+                {sessionData.map((e, i) => (
+                  <Cell key={`cell-${i}`} fill={(e.close || 0) >= (e.open || 0) ? '#10b981' : '#f43f5e'} fillOpacity={0.8} />
+                ))}
+              </Bar>
             )}
 
+            {/* DPOC Step Area - Corrected to use stepAfter for the 'Migration' look */}
             <Area 
-              yAxisId="right"
+              yAxisId="right" 
               type="stepAfter" 
               dataKey="dpoc" 
               stroke="#6366f1" 
-              strokeWidth={3}
-              fillOpacity={1} 
-              fill="url(#colorDpoc)"
-              dot={false}
-              activeDot={{ r: 6, stroke: '#fff', strokeWidth: 2, fill: '#6366f1' }}
-              animationDuration={1000}
+              strokeWidth={3} 
+              fill="url(#colorDpoc)" 
+              dot={false} 
+              isAnimationActive={false}
+              connectNulls={true}
             />
-            
-            {/* Fix: Removed 'backgroundColor' which is not supported in ReferenceLine label object */}
+
             <ReferenceLine 
-              yAxisId="right"
+              yAxisId="right" 
               y={currentPrice} 
               stroke="#f43f5e" 
-              strokeWidth={2}
+              strokeWidth={3} 
               label={{ 
-                value: `LTP: ${currentPrice.toFixed(1)}`, 
+                value: `P: ${currentPrice.toFixed(1)}`, 
                 fill: '#fff', 
-                fontSize: 12, 
-                position: 'insideRight',
-                fontWeight: '900',
-                dy: -10
+                fontSize: 10, 
+                position: 'insideRight', 
+                fontWeight: '950',
+                backgroundColor: '#f43f5e',
+                padding: 4
               }} 
             />
 
             <Brush 
               dataKey="time" 
-              height={40} 
-              stroke="#1e293b" 
-              fill="#020617"
-              travellerWidth={15}
-            >
-              <ComposedChart>
-                <Area type="monotone" dataKey="dpoc" stroke="#6366f1" fill="#6366f1" fillOpacity={0.1} />
-              </ComposedChart>
-            </Brush>
+              height={20} 
+              stroke="#334155" 
+              fill="#020617" 
+              travellerWidth={8}
+            />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

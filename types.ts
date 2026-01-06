@@ -1,3 +1,11 @@
+export interface DPOCStep {
+  slice: string;
+  dpoc: number;
+  delta_pts: number;
+  jump: boolean;
+  developing: boolean;
+  bar_count: number;
+}
 
 export interface DPOCSlice {
   time: string;
@@ -17,6 +25,16 @@ export interface FVG {
   top: number;
   bottom: number;
   time: string;
+}
+
+export interface ProfileSet {
+  poc: number;
+  vah: number;
+  val: number;
+  high: number;
+  low: number;
+  hvn_nodes: number[];
+  lvn_nodes: number[];
 }
 
 export interface MarketSnapshot {
@@ -69,9 +87,23 @@ export interface MarketSnapshot {
         note?: string;
       };
       dpoc_migration: {
-        dpoc_slices: DPOCSlice[];
-        migration_direction: string;
-        steps_since_1030: number;
+        dpoc_history?: DPOCStep[];
+        dpoc_slices?: DPOCSlice[];
+        direction?: string;
+        migration_direction?: string;
+        net_migration_pts?: number;
+        steps_since_1030?: number;
+        avg_velocity_per_30min?: number;
+        abs_velocity?: number;
+        relative_retain_percent?: number;
+        accelerating?: boolean;
+        decelerating?: boolean;
+        cluster_range_last_4?: number;
+        is_stabilizing?: boolean;
+        price_vs_dpoc_cluster?: string;
+        reclaiming_opposite?: boolean;
+        prior_exhausted?: boolean;
+        dpoc_regime?: string;
         note: string;
       };
       volume_profile: {
@@ -87,6 +119,9 @@ export interface MarketSnapshot {
         single_prints_below_val: number;
         tpo_shape: string;
         fattening_zone: string;
+        poor_high?: number;
+        poor_low?: number;
+        note?: string;
       };
       ninety_min_pd_arrays: {
         ninety_min_high: number;
@@ -111,6 +146,11 @@ export interface MarketSnapshot {
         price_accepted_higher: string;
         price_accepted_lower: string;
       };
+      dpoc_vs_ib?: {
+        dpoc_above_ibh: boolean;
+        dpoc_below_ibl: boolean;
+        dpoc_extreme_shift: string;
+      };
       dpoc_compression: {
         compressing_against_vah: boolean;
         compressing_against_val: boolean;
@@ -118,20 +158,27 @@ export interface MarketSnapshot {
       };
       price_location: {
         location_label: string;
+        in_upper_third?: boolean;
+        in_lower_third?: boolean;
+        in_middle?: boolean;
       };
+      tpo_signals?: {
+        single_prints_above: boolean;
+        single_prints_below: boolean;
+        fattening_upper: boolean;
+        fattening_lower: boolean;
+      };
+      migration?: {
+        significant_up: boolean;
+        significant_down: boolean;
+        net_direction: string;
+        pts_since_1030: number;
+      };
+      note?: string;
     };
-    output: string;
   };
-}
-
-export interface ProfileSet {
-  poc: number;
-  vah: number;
-  val: number;
-  high: number;
-  low: number;
-  hvn_nodes: number[];
-  lvn_nodes: number[];
+  decoded?: DecodedOutput;
+  output?: string | DecodedOutput;
 }
 
 export interface DecodedOutput {
