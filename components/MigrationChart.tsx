@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { 
   ComposedChart, 
@@ -13,7 +12,8 @@ import {
   Bar,
   Cell,
   Line,
-  Brush
+  Brush,
+  Scatter
 } from 'recharts';
 import { DPOCSlice, FVG } from '../types';
 
@@ -27,6 +27,7 @@ interface MigrationChartProps {
   showIB: boolean;
   showProfile: boolean;
   showFVG: boolean;
+  showMigrationTrace: boolean;
   levels: {
     asia_high: number;
     asia_low: number;
@@ -63,6 +64,7 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
   showIB,
   showProfile,
   showFVG,
+  showMigrationTrace,
   levels,
   profileLevels,
   fvgData 
@@ -72,7 +74,7 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
       .filter(d => {
         if (!d.time) return false;
         const [hours] = d.time.split(':').map(Number);
-        return hours >= 8; // Session Focus
+        return hours >= 8; 
       })
       .sort((a, b) => a.time.localeCompare(b.time));
   }, [data]);
@@ -117,6 +119,45 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
     ];
   }, [fvgData, showFVG]);
 
+  const renderCustomScatterDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (!payload.isMigrationStep) return null;
+
+    return (
+      <g key={`dot-${payload.time}`}>
+        <defs>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        
+        {/* Core Node */}
+        <circle 
+          cx={cx} cy={cy} r={payload.isJump ? 7 : 5} 
+          fill={payload.isJump ? "#a3e635" : "#06b6d4"} 
+          stroke="#fff" 
+          strokeWidth={2} 
+          filter="url(#glow)"
+          className={payload.isJump ? "animate-pulse" : ""}
+        />
+        
+        {/* Outer Ring for Jumps */}
+        {payload.isJump && (
+          <circle 
+            cx={cx} cy={cy} r={12} 
+            fill="transparent" 
+            stroke="#a3e635" 
+            strokeOpacity={0.5} 
+            strokeWidth={1.5}
+            className="animate-ping"
+            style={{ animationDuration: '3s' }}
+          />
+        )}
+      </g>
+    );
+  };
+
   if (sessionData.length === 0) return (
     <div className="h-full w-full flex items-center justify-center italic text-slate-700 font-black uppercase tracking-widest bg-slate-950/20">
       Awaiting Market Intelligence...
@@ -159,6 +200,7 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
             <Tooltip 
               contentStyle={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', fontSize: '11px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' }}
               itemStyle={{ fontWeight: 900 }}
+              labelStyle={{ color: '#6366f1', marginBottom: '4px', fontWeight: 900 }}
             />
 
             {showFVG && activeFvgs.map((fvg, i) => (
@@ -192,8 +234,6 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
               <>
                 <Line yAxisId="right" type="stepAfter" dataKey="ibh" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} strokeOpacity={0.8} />
                 <Line yAxisId="right" type="stepAfter" dataKey="ibl" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} strokeOpacity={0.8} />
-                <ReferenceLine yAxisId="right" y={sessionData[sessionData.length-1]?.ibh} stroke="transparent" label={{ value: 'IBH', position: 'insideRight', fill: '#f59e0b', fontSize: 8, fontWeight: 900 }} />
-                <ReferenceLine yAxisId="right" y={sessionData[sessionData.length-1]?.ibl} stroke="transparent" label={{ value: 'IBL', position: 'insideRight', fill: '#f59e0b', fontSize: 8, fontWeight: 900 }} />
               </>
             )}
 
@@ -224,7 +264,6 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
               </Bar>
             )}
 
-            {/* DPOC Step Area - Corrected to use stepAfter for the 'Migration' look */}
             <Area 
               yAxisId="right" 
               type="stepAfter" 
@@ -236,6 +275,17 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
               isAnimationActive={false}
               connectNulls={true}
             />
+
+            {/* Migration History Nodes (The Trace) */}
+            {showMigrationTrace && (
+              <Scatter 
+                yAxisId="right" 
+                name="DPOC Trace" 
+                dataKey="dpoc" 
+                shape={renderCustomScatterDot}
+                isAnimationActive={true}
+              />
+            )}
 
             <ReferenceLine 
               yAxisId="right" 

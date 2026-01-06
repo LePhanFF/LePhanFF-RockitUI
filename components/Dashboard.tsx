@@ -34,7 +34,8 @@ import {
   Gauge,
   Clock,
   ArrowRight,
-  Wind
+  Wind,
+  Share2
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 
@@ -93,6 +94,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
   const [showProfile, setShowProfile] = useState(true);
   const [showFVG, setShowFVG] = useState(true);
   const [showIB, setShowIB] = useState(true);
+  const [showMigrationTrace, setShowMigrationTrace] = useState(true);
   
   const input = snapshot?.input || {};
   const intraday = input?.intraday || {};
@@ -110,13 +112,17 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     const currentIndex = allSnapshots.findIndex(s => s.input?.current_et_time === snapshot.input?.current_et_time);
     const visibleSnapshots = allSnapshots.slice(0, currentIndex + 1);
     const historicalSlices = mig.dpoc_slices || [];
+    const traceHistory = mig.dpoc_history || [];
 
     return visibleSnapshots.map(s => {
       const inp = s.input || {};
       const intra = inp.intraday || {};
       const ibData = intra.ib || {};
+      
       const matchedSlice = historicalSlices.find(sl => sl.time === inp.current_et_time);
       const fallbackSlice = [...historicalSlices].filter(sl => sl.time <= inp.current_et_time).sort((a, b) => b.time.localeCompare(a.time))[0];
+      
+      const traceMatch = traceHistory.find(th => th.slice === inp.current_et_time);
 
       return {
         time: inp.current_et_time,
@@ -129,7 +135,11 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
         ema20: ibData.ema20,
         ema50: ibData.ema50,
         ibh: ibData.ib_high,
-        ibl: ibData.ib_low
+        ibl: ibData.ib_low,
+        isMigrationStep: !!traceMatch,
+        migrationValue: traceMatch ? traceMatch.dpoc : null,
+        isJump: traceMatch?.jump || false,
+        delta: traceMatch?.delta_pts || 0
       };
     }).filter(d => d.time);
   }, [allSnapshots, snapshot, mig]);
@@ -175,6 +185,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
             <div className="flex items-center gap-1.5 shrink-0 bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60">
               {[
                 { active: showOHLC, setter: setShowOHLC, icon: CandlestickChart, color: 'text-emerald-400', label: 'OHLC' },
+                { active: showMigrationTrace, setter: setShowMigrationTrace, icon: Share2, color: 'text-cyan-400', label: 'DPOC TRACE' },
                 { active: showIB, setter: setShowIB, icon: Shield, color: 'text-orange-400', label: 'IB' },
                 { active: showVWAP, setter: setShowVWAP, icon: Target, color: 'text-amber-400', label: 'VWAP' },
                 { active: showEMA, setter: setShowEMA, icon: LineChart, color: 'text-cyan-400', label: 'EMA' },
@@ -200,6 +211,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
               showIB={showIB}
               showProfile={showProfile}
               showFVG={showFVG}
+              showMigrationTrace={showMigrationTrace}
               levels={premarket as any} 
               profileLevels={{ 
                 vah: tpo?.current_vah || vol?.current_session?.vah || 0,
@@ -363,7 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 <div className="bg-slate-950/60 border border-slate-800/60 rounded-2xl p-6">
                   <div className="flex items-center gap-3 mb-6">
                     <History className="w-4 h-4 text-indigo-400" />
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Step-by-Step History Trace</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">30-Min DPOC Trace</h4>
                   </div>
                   <div className="space-y-3">
                     {(mig.dpoc_history || mig.dpoc_slices || []).slice(-6).reverse().map((step: any, i: number) => {
