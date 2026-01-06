@@ -16,7 +16,10 @@ import {
   BrainCircuit,
   Sparkles,
   Wifi,
-  WifiOff
+  WifiOff,
+  Activity,
+  ChevronRight,
+  Zap
 } from 'lucide-react';
 
 const GITHUB_REPO = "LePhanFF/RockitDataFeed";
@@ -46,11 +49,9 @@ const hardenedClean = (raw: string): string => {
 const salvageIntel = (raw: string): Partial<DecodedOutput> => {
   const salvaged: any = {};
   
-  // Day Type Salvage
   const dayTypeMatch = raw.match(/"(?:day_type|type|market_type)"\s*[:=]\s*(?:\{\s*"type"\s*:\s*)?"(.*?)"/i);
   if (dayTypeMatch) salvaged.day_type = { type: dayTypeMatch[1].trim() };
 
-  // Reasoning / Evidence Salvage
   const reasoningRegex = /"(?:day_type_reasoning|evidence|reasoning|logic_points|points|strategic_reasoning|analysis_points)"\s*[:=]\s*\[([\s\S]*?)\]/i;
   const rMatch = raw.match(reasoningRegex);
   if (rMatch) {
@@ -231,18 +232,33 @@ const App: React.FC = () => {
 
   const currentSnapshot = processedSnapshots[selectedIndex] || null;
   const decodedOutput = currentSnapshot?.decoded || null;
+  const reasoning = decodedOutput?.day_type_reasoning || [];
 
   return (
     <div className="h-screen flex flex-col bg-slate-950 overflow-hidden text-slate-200 font-sans">
-      <header className="shrink-0 z-[60] bg-slate-900/95 backdrop-blur-2xl border-b border-slate-800/60 px-6 py-4 flex items-center justify-between shadow-2xl">
-        <div className="flex items-center gap-4">
+      <style>{`
+        @keyframes ticker-scroll-horizontal {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .animate-ticker-header {
+          animation: ticker-scroll-horizontal 40s linear infinite;
+        }
+        .animate-ticker-header:hover {
+          animation-play-state: paused;
+        }
+      `}</style>
+
+      <header className="shrink-0 z-[60] bg-slate-900/95 backdrop-blur-2xl border-b border-slate-800/60 px-6 py-4 flex items-center shadow-2xl relative">
+        {/* Left Branding Cluster */}
+        <div className="flex items-center gap-4 shrink-0 mr-6">
           <div className="p-2.5 bg-indigo-600 rounded-xl shadow-xl border border-indigo-400/20">
             <LayoutDashboard className="w-6 h-6 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-black tracking-tight text-white uppercase italic leading-none">ROCKIT <span className="text-indigo-400 not-italic">ENGINE</span></h1>
             <div className="flex items-center gap-3 mt-1.5">
-              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">Static Terminal v7.6</p>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">v7.6</p>
               <div className="flex items-center gap-4">
                 <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[8px] font-black border transition-colors ${
                   connectionStatus === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
@@ -259,29 +275,64 @@ const App: React.FC = () => {
           </div>
         </div>
 
+        {/* Center-Right Large Evidence Ticker Area */}
+        {reasoning.length > 0 && (
+          <div className="flex-1 h-14 bg-slate-950/40 border border-slate-800/60 rounded-2xl overflow-hidden group flex items-center relative mx-4 shadow-inner">
+            <div className="absolute left-0 top-0 bottom-0 z-20 bg-slate-900 border-r border-indigo-500/30 px-4 flex items-center gap-3">
+              <div className="relative">
+                <Activity className="w-5 h-5 text-indigo-400 animate-pulse" />
+                <Zap className="w-2 h-2 text-indigo-300 absolute -top-1 -right-1" />
+              </div>
+              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] hidden xl:block">Strategic Intelligence</span>
+            </div>
+            <div className="flex-1 relative overflow-hidden h-full">
+              <div className="animate-ticker-header flex items-center h-full whitespace-nowrap gap-12 pl-[160px]">
+                {/* Looping Content */}
+                {[...reasoning, ...reasoning, ...reasoning].map((reason, idx) => (
+                  <div key={idx} className="flex items-center gap-4 shrink-0">
+                    <span className="p-1 rounded bg-indigo-500/10"><ChevronRight className="w-3 h-3 text-indigo-400" /></span>
+                    <span className="text-sm font-black text-slate-100 uppercase tracking-wide">
+                      {reason}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {/* Fade masks */}
+              <div className="absolute inset-y-0 left-[140px] w-24 bg-gradient-to-r from-slate-950/80 to-transparent pointer-events-none z-10" />
+              <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-slate-950/80 to-transparent pointer-events-none z-10" />
+            </div>
+          </div>
+        )}
+
+        {/* Far Right Market Snapshot Cluster */}
         {currentSnapshot && (
-          <div className="flex items-center gap-8">
+          <div className="flex items-center gap-6 shrink-0 ml-4 pl-6 border-l border-slate-800/60">
             <div className="flex flex-col items-end">
-              <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Market Clock</span>
-              <div className="flex items-center gap-2 bg-slate-800/40 px-3 py-1.5 rounded-lg border border-slate-700/50">
+              <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1 leading-none">Clock</span>
+              <div className="flex items-center gap-2 bg-slate-800/40 px-3 py-2 rounded-xl border border-slate-700/50 shadow-lg">
                 <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="text-sm font-mono font-bold text-slate-100">{currentSnapshot.input?.current_et_time || '--:--'}</span>
+                <span className="text-base font-mono font-black text-slate-100">{currentSnapshot.input?.current_et_time || '--:--'}</span>
               </div>
             </div>
-            <div className="flex items-center gap-5 pl-5 border-l border-slate-800/60">
-              <div className={`px-6 py-2.5 rounded-2xl flex items-center gap-3 border transition-all ${
+            
+            <div className="flex items-center gap-4">
+              <div className={`px-5 py-2 rounded-2xl flex flex-col items-center justify-center border transition-all shadow-xl ${
                 decodedOutput?.bias?.toUpperCase().includes('LONG') 
                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
                   : decodedOutput?.bias?.toUpperCase().includes('SHORT')
                   ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
                   : 'bg-slate-800/40 border-slate-700/50 text-slate-400'
               }`}>
-                {decodedOutput?.bias?.toUpperCase().includes('LONG') ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                <span className="font-black text-base tracking-widest uppercase italic">{decodedOutput?.bias || 'NEUTRAL'}</span>
+                <span className="text-[8px] font-black uppercase tracking-widest mb-1 opacity-60">System Bias</span>
+                <div className="flex items-center gap-2">
+                  {decodedOutput?.bias?.toUpperCase().includes('LONG') ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                  <span className="font-black text-sm tracking-[0.1em] uppercase italic">{decodedOutput?.bias || 'NEUTRAL'}</span>
+                </div>
               </div>
+
               <div className="flex flex-col items-center">
-                <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1">Confidence</span>
-                <div className="text-4xl font-black font-mono px-5 py-1 rounded-2xl border border-slate-700/50 text-slate-100 bg-slate-800/40">
+                <span className="text-[9px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1 leading-none">Confidence</span>
+                <div className="text-3xl font-black font-mono px-4 py-1 rounded-xl border border-slate-700/50 text-slate-100 bg-slate-800/40 shadow-inner">
                   {decodedOutput?.confidence || '0%'}
                 </div>
               </div>
@@ -366,7 +417,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex flex-col lg:flex-row gap-6">
                   <div className="flex-1"><span className="text-[9px] text-slate-500 uppercase block mb-2 font-black">Summary</span><p className="text-sm font-bold text-slate-200 italic leading-relaxed">{aiAudit.summary}</p></div>
-                  <div className="lg:max-w-[280px] border-l border-slate-800 pl-6"><span className="text-[9px] text-slate-500 uppercase block mb-3 font-black">Key Shifts</span><div className="space-y-2">{aiAudit.shifts.map((s, i) => <div key={i} className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2 py-1.5 rounded border border-indigo-500/20">{s}</div>)}</div></div>
+                  <div className="lg:max-w-[280px] border-l border-slate-800 pl-6"><span className="text-[9px] text-slate-500 uppercase block mb-3 font-black">Key Shifts</span><div className="space-y-2">{aiAudit.shifts.map((s, i) => <div key={i} className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 px-2.5 py-1.5 rounded border border-indigo-500/20">{s}</div>)}</div></div>
                 </div>
               </div>
             </div>

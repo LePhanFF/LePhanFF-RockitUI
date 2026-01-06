@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { MarketSnapshot, DecodedOutput, ProfileSet, DPOCSlice, FVG, DPOCStep } from '../types';
 import { 
@@ -35,7 +36,8 @@ import {
   Clock,
   ArrowRight,
   Wind,
-  Share2
+  Share2,
+  ChevronRight
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 
@@ -47,10 +49,10 @@ interface DashboardProps {
 
 type TabType = 'brief' | 'logic' | 'globex' | 'profile' | 'migration' | 'gaps' | 'thinking';
 
-const StatBox = ({ label, value, colorClass = "text-slate-100" }: { label: string; value: string | number; colorClass?: string }) => (
-  <div className="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 hover:border-indigo-500/30 transition-all">
-    <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 block">{label}</span>
-    <div className={`text-base font-black uppercase tracking-tighter ${colorClass}`}>{value}</div>
+const StatBox = ({ label, value, colorClass = "text-slate-100", compact = false }: { label: string; value: string | number; colorClass?: string; compact?: boolean }) => (
+  <div className={`bg-slate-900/40 border border-slate-800/40 rounded-xl hover:border-indigo-500/30 transition-all ${compact ? 'p-2' : 'p-4'}`}>
+    <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1 block leading-none">{label}</span>
+    <div className={`font-black uppercase tracking-tighter leading-none ${compact ? 'text-xs' : 'text-base'} ${colorClass}`}>{value}</div>
   </div>
 );
 
@@ -151,6 +153,8 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     return [];
   };
 
+  const reasoning = getReasoning();
+
   const getNarrative = () => {
     if (!output) return "Synchronizing Intelligence...";
     return output.one_liner || (output as any).narrative || "Context unavailable.";
@@ -162,7 +166,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     return typeof dt === 'object' ? dt.type : dt || "N/A";
   };
 
-  const reasoning = getReasoning();
   const narrative = getNarrative();
   const dayType = getDayType();
 
@@ -247,6 +250,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-950/40">
           {activeTab === 'brief' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+              {/* Narrative Section */}
               <div className="relative overflow-hidden group">
                 <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors rounded-2xl" />
                 <div className="relative p-7 border border-indigo-500/30 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.05)]">
@@ -258,51 +262,54 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 </div>
               </div>
 
+              {/* Bias & Confidence - Resized 1/3 smaller */}
               <div className="grid grid-cols-2 gap-4">
-                <div className={`p-6 rounded-2xl border transition-all ${output?.bias?.toUpperCase().includes('LONG') ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' : 'bg-rose-500/5 border-rose-500/40 text-rose-400'}`}>
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 block">System Bias</span>
-                  <div className="text-3xl font-black tracking-widest italic">{output?.bias?.toUpperCase() || 'NEUTRAL'}</div>
+                <div className={`p-4 rounded-2xl border transition-all ${output?.bias?.toUpperCase().includes('LONG') ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' : 'bg-rose-500/5 border-rose-500/40 text-rose-400'}`}>
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2 block">System Bias</span>
+                  <div className="text-xl font-black tracking-widest italic">{output?.bias?.toUpperCase() || 'NEUTRAL'}</div>
                 </div>
-                <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/40">
-                  <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-3 block">Confidence</span>
-                  <div className="text-3xl font-black text-slate-100 font-mono tracking-tighter">{output?.confidence || '0%'}</div>
+                <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2 block">Confidence</span>
+                  <div className="text-xl font-black text-slate-100 font-mono tracking-tighter">{output?.confidence || '0%'}</div>
                 </div>
               </div>
 
-              <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-7">
-                 <div className="flex items-center gap-3 mb-8">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20"><CheckCircle2 className="w-5 h-5 text-indigo-400" /></div>
-                    <h4 className="text-[12px] font-black uppercase tracking-[0.3em] text-slate-300">Strategic Intelligence Evidence</h4>
+              {/* Technical Data - MOVED ABOVE Strategic Evidence & Made More Compact */}
+              <div className="bg-slate-900/20 border border-slate-800/40 rounded-2xl p-4">
+                 <div className="flex items-center gap-2 mb-4">
+                    <Wind className="w-3.5 h-3.5 text-indigo-400" />
+                    <h4 className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Terminal Technical Data</h4>
                  </div>
-                 <div className="space-y-6">
-                    {reasoning.length > 0 ? reasoning.map((reason, idx) => (
-                      <div key={idx} className="flex items-start gap-5 group">
-                        <div className="mt-2 w-2 h-2 rounded-full bg-indigo-500 shrink-0 shadow-[0_0_15px_rgba(99,102,241,0.8)]" />
-                        <p className="text-[15px] font-bold text-slate-300 leading-[1.6] tracking-tight group-hover:text-white transition-colors">{reason}</p>
-                      </div>
-                    )) : <div className="text-center py-10 opacity-30 text-[10px] font-black uppercase tracking-[0.5em]">Awaiting Analysis...</div>}
-                 </div>
-              </div>
-
-              <div className="bg-slate-900/20 border border-slate-800/40 rounded-2xl p-6">
-                 <div className="flex items-center gap-2 mb-6">
-                    <Wind className="w-4 h-4 text-indigo-400" />
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Terminal Technical Data</h4>
-                 </div>
-                 <div className="grid grid-cols-3 gap-4">
-                    <StatBox label="Session Day Type" value={dayType} />
-                    <StatBox label="ATR (14)" value={ib?.atr14 ? ib.atr14.toFixed(2) : 'N/A'} colorClass="text-amber-400" />
-                    <StatBox label="RSI (14)" value={ib?.rsi14 ? `${ib.rsi14.toFixed(1)}` : 'N/A'} colorClass={ib?.rsi14 > 70 ? 'text-rose-400' : ib?.rsi14 < 30 ? 'text-emerald-400' : 'text-slate-300'} />
-                    <StatBox label="IB Range" value={ib?.ib_range ? ib.ib_range.toFixed(1) : 'N/A'} />
-                    <StatBox label="Total Volume" value={ib?.current_volume ? ib.current_volume.toLocaleString() : 'N/A'} colorClass="text-indigo-400" />
-                    <div className="bg-slate-900/40 border border-slate-800/40 rounded-xl p-4 flex flex-col justify-center">
-                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 block">Wick Parade</span>
+                 <div className="grid grid-cols-3 gap-3">
+                    <StatBox label="Day Type" value={dayType} compact />
+                    <StatBox label="ATR (14)" value={ib?.atr14 ? ib.atr14.toFixed(2) : 'N/A'} colorClass="text-amber-400" compact />
+                    <StatBox label="RSI (14)" value={ib?.rsi14 ? `${ib.rsi14.toFixed(1)}` : 'N/A'} colorClass={ib?.rsi14 > 70 ? 'text-rose-400' : ib?.rsi14 < 30 ? 'text-emerald-400' : 'text-slate-300'} compact />
+                    <StatBox label="IB Range" value={ib?.ib_range ? ib.ib_range.toFixed(1) : 'N/A'} compact />
+                    <StatBox label="Volume" value={ib?.current_volume ? (ib.current_volume / 1000).toFixed(1) + 'K' : 'N/A'} colorClass="text-indigo-400" compact />
+                    <div className="bg-slate-900/40 border border-slate-800/40 rounded-xl p-2 flex flex-col justify-center">
+                       <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1 block leading-none">Wick Parade</span>
                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-black text-emerald-400">B: {wicks.bullish_wick_parade_count || 0}</span>
+                          <span className="text-[10px] font-black text-emerald-400">B: {wicks.bullish_wick_parade_count || 0}</span>
                           <div className="h-3 w-px bg-slate-700" />
-                          <span className="text-xs font-black text-rose-400">S: {wicks.bearish_wick_parade_count || 0}</span>
+                          <span className="text-[10px] font-black text-rose-400">S: {wicks.bearish_wick_parade_count || 0}</span>
                        </div>
                     </div>
+                 </div>
+              </div>
+
+              {/* Strategic Evidence Section */}
+              <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-7">
+                 <div className="flex items-center gap-3 mb-6">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20"><CheckCircle2 className="w-4 h-4 text-indigo-400" /></div>
+                    <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-300">Strategic Intelligence Evidence</h4>
+                 </div>
+                 <div className="space-y-4">
+                    {reasoning.length > 0 ? reasoning.map((reason, idx) => (
+                      <div key={idx} className="flex items-start gap-4 group">
+                        <div className="mt-2 w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0 shadow-[0_0_10px_rgba(99,102,241,0.6)]" />
+                        <p className="text-[14px] font-bold text-slate-400 leading-[1.5] tracking-tight group-hover:text-white transition-colors">{reason}</p>
+                      </div>
+                    )) : <div className="text-center py-10 opacity-30 text-[10px] font-black uppercase tracking-[0.5em]">Awaiting Analysis...</div>}
                  </div>
               </div>
             </div>
@@ -367,7 +374,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   <ConfluenceCard title="Flow Logic" icon={Maximize2}>
                     <LogicBadge label="Relative Retain %" value={mig.relative_retain_percent ? `${mig.relative_retain_percent}%` : '0%'} condition={(mig.relative_retain_percent || 0) > 70} />
                     <LogicBadge label="Cluster Range (L4)" value={mig.cluster_range_last_4 || '0.0'} condition={(mig.cluster_range_last_4 || 0) < 10} />
-                    <LogicBadge label="Price vs Cluster" value={mig.price_vs_dpoc_cluster || 'N/A'} condition={mig.price_vs_dpoc_cluster === 'above'} />
+                    <LogicBadge label="Price vs DPOC cluster" value={mig.price_vs_dpoc_cluster || 'N/A'} condition={mig.price_vs_dpoc_cluster === 'above'} />
                     <LogicBadge label="Reclaiming Opposite" value={mig.reclaiming_opposite} />
                   </ConfluenceCard>
                 </div>
