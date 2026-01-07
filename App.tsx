@@ -2,7 +2,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
-import { rawSnapshots } from './mockData';
 import { GoogleGenAI } from "@google/genai";
 import { 
   Clock, 
