@@ -52,7 +52,7 @@ import {
   TrendingUp as TrendUpIcon,
   Anchor,
   Terminal,
-  CpuCore
+  CalendarDays
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 import ProfileLadder from './ProfileLadder';
@@ -63,22 +63,22 @@ interface DashboardProps {
   allSnapshots?: MarketSnapshot[];
 }
 
-type TabType = 'brief' | 'pulse' | 'logic' | 'globex' | 'profile' | 'migration' | 'gaps' | 'thinking';
+type TabType = 'brief' | 'pulse' | 'logic' | 'migration' | 'globex' | 'profile' | 'gaps' | 'thinking';
 
 const StatBox = ({ label, value, colorClass = "text-slate-100", compact = false }: { label: string; value: string | number; colorClass?: string; compact?: boolean }) => (
-  <div className={`bg-slate-900/40 border border-slate-800/40 rounded-xl hover:border-indigo-500/30 transition-all ${compact ? 'p-2' : 'p-4'}`}>
-    <span className="text-[8px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1 block leading-none">{label}</span>
-    <div className={`font-black uppercase tracking-tighter leading-none ${compact ? 'text-xs' : 'text-base'} ${colorClass}`}>{value}</div>
+  <div className={`bg-slate-900/40 border border-slate-800/40 rounded-xl hover:border-indigo-500/30 transition-all ${compact ? 'p-3' : 'p-5'}`}>
+    <span className="text-[11px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2 block leading-none">{label}</span>
+    <div className={`font-black uppercase tracking-tighter leading-none ${compact ? 'text-sm' : 'text-xl'} ${colorClass}`}>{value}</div>
   </div>
 );
 
 const ConfluenceCard = ({ title, icon: Icon, children, className = "" }: { title: string; icon: any; children?: React.ReactNode; className?: string }) => (
-  <div className={`bg-slate-900/60 border border-slate-800 rounded-xl p-5 space-y-4 hover:border-indigo-500/30 transition-all ${className}`}>
-    <div className="flex items-center gap-2.5 mb-2">
-      <Icon className="w-4 h-4 text-indigo-400" />
-      <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">{title}</h4>
+  <div className={`bg-slate-900/60 border border-slate-800 rounded-xl p-6 space-y-4 hover:border-indigo-500/30 transition-all ${className}`}>
+    <div className="flex items-center gap-3 mb-3">
+      <Icon className="w-5 h-5 text-indigo-400" />
+      <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">{title}</h4>
     </div>
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {children}
     </div>
   </div>
@@ -90,19 +90,19 @@ const LogicBadge = ({ label, value, condition }: { label: string; value: string 
   
   const getColors = () => {
     const v = displayValue.toLowerCase();
-    if (isPositive === true || v === 'yes' || v.includes('long') || v.includes('bullish') || v.includes('up') || v.includes('above') || v === 'aggressive_bullish' || v === 'complete') {
+    if (isPositive === true || v === 'yes' || v.includes('long') || v.includes('bullish') || v.includes('up') || v.includes('above') || v === 'aggressive_bullish' || v === 'complete' || v === 'neutral') {
       return 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
     }
-    if (isPositive === false || v === 'no' || v.includes('short') || v.includes('bearish') || v.includes('down') || v.includes('below') || v === 'aggressive_bearish') {
+    if (isPositive === false || v === 'no' || v.includes('short') || v.includes('bearish') || v.includes('down') || v.includes('below') || v === 'aggressive_bearish' || v === 'compressed' || v === 'true') {
       return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
     }
     return 'bg-slate-800 text-slate-400 border border-slate-700';
   };
 
   return (
-    <div className="flex justify-between items-center py-2 border-b border-slate-800/40 last:border-0">
-      <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
-      <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest ${getColors()}`}>
+    <div className="flex justify-between items-center py-2.5 border-b border-slate-800/40 last:border-0">
+      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className={`text-[11px] font-black px-2.5 py-1 rounded uppercase tracking-widest ${getColors()}`}>
         {displayValue}
       </span>
     </div>
@@ -186,18 +186,18 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
       <div className="flex-[2] flex flex-col gap-4 min-w-0">
         <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6 flex flex-col h-full shadow-2xl relative">
           <div className="flex items-start justify-between mb-4 shrink-0 gap-4">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 shrink-0 mt-1"><Activity className="w-6 h-6 text-indigo-400" /></div>
+            <div className="flex items-start gap-4 min-w-0">
+              <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20 shrink-0 mt-1"><Activity className="w-7 h-7 text-indigo-400" /></div>
               <div className="min-w-0">
-                <h2 className="text-lg font-black text-slate-100 uppercase tracking-tight">Migration Tracking</h2>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Order Flow Context</span>
-                  <div className="w-1 h-1 rounded-full bg-slate-700"></div>
-                  <span className="text-[9px] text-indigo-400 font-black uppercase tracking-widest">{migData.migration_direction || migData.direction || 'STABLE'}</span>
+                <h2 className="text-xl font-black text-slate-100 uppercase tracking-tight">Migration Tracking</h2>
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-[11px] text-slate-500 font-bold uppercase tracking-widest">Order Flow Context</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
+                  <span className="text-[11px] text-indigo-400 font-black uppercase tracking-widest">{migData.migration_direction || migData.direction || 'STABLE'}</span>
                 </div>
               </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0 bg-slate-950/50 p-1.5 rounded-xl border border-slate-800/60">
+            <div className="flex items-center gap-1.5 shrink-0 bg-slate-950/50 p-2 rounded-xl border border-slate-800/60">
               {[
                 { active: showOHLC, setter: setShowOHLC, icon: CandlestickChart, color: 'text-emerald-400', label: 'OHLC' },
                 { active: showMigrationTrace, setter: setShowMigrationTrace, icon: Share2, color: 'text-cyan-400', label: 'DPOC TRACE' },
@@ -208,9 +208,9 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 { active: showProfile, setter: setShowProfile, icon: Layers, color: 'text-indigo-400', label: 'PROF' },
                 { active: showFVG, setter: setShowFVG, icon: Zap, color: 'text-rose-400', label: 'FVG' }
               ].map((btn, i) => (
-                <button key={i} onClick={() => btn.setter(!btn.active)} className={`p-2 rounded-lg transition-all flex items-center gap-1 ${btn.active ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-600 hover:text-slate-400'}`}>
-                  <btn.icon className={`w-3.5 h-3.5 ${btn.active ? btn.color : ''}`} />
-                  <span className="text-[8px] font-black uppercase hidden lg:block">{btn.label}</span>
+                <button key={i} onClick={() => btn.setter(!btn.active)} className={`p-2.5 rounded-lg transition-all flex items-center gap-2 ${btn.active ? 'bg-slate-800 text-white shadow-lg' : 'text-slate-600 hover:text-slate-400'}`}>
+                  <btn.icon className={`w-4 h-4 ${btn.active ? btn.color : ''}`} />
+                  <span className="text-[10px] font-black uppercase hidden lg:block">{btn.label}</span>
                 </button>
               ))}
             </div>
@@ -241,7 +241,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
       {/* RIGHT: TABS / INTELLIGENCE PANEL */}
       <div className="flex-1 flex flex-col bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl min-w-[580px]">
-        <div className="flex border-b border-slate-800 p-1.5 gap-1 shrink-0 bg-slate-900/90 overflow-x-auto no-scrollbar">
+        <div className="flex border-b border-slate-800 p-2 gap-1.5 shrink-0 bg-slate-900/90 overflow-x-auto no-scrollbar">
           {[
             { id: 'brief', label: 'Brief', icon: Info },
             { id: 'pulse', label: 'Pulse', icon: Waves },
@@ -253,63 +253,63 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
             { id: 'thinking', label: 'Think', icon: Brain }
           ].map((tab) => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)}
-              className={`flex-1 flex flex-col items-center justify-center gap-2 py-3 px-2 rounded-xl transition-all font-black text-[9px] uppercase tracking-widest ${
+              className={`flex-1 flex flex-col items-center justify-center gap-2.5 py-4 px-3 rounded-xl transition-all font-black text-[11px] uppercase tracking-widest ${
                 activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'
               }`}>
-              <tab.icon className="w-4 h-4" />{tab.label}
+              <tab.icon className="w-5 h-5" />{tab.label}
             </button>
           ))}
         </div>
 
-        <div className={`flex-1 overflow-y-auto custom-scrollbar ${activeTab === 'thinking' ? 'p-0' : 'p-6'} bg-slate-950/40`}>
+        <div className={`flex-1 overflow-y-auto custom-scrollbar ${activeTab === 'thinking' ? 'p-0' : 'p-8'} bg-slate-950/40`}>
           {activeTab === 'brief' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
               <div className="relative overflow-hidden group">
                 <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors rounded-2xl" />
-                <div className="relative p-7 border border-indigo-500/30 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.05)]">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                      <Fingerprint className="w-4 h-4 text-indigo-400" />
-                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em]">One-Liner Narrative</span>
+                <div className="relative p-8 border border-indigo-500/30 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.05)]">
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                      <Fingerprint className="w-5 h-5 text-indigo-400" />
+                      <span className="text-xs font-black text-indigo-400 uppercase tracking-[0.4em]">One-Liner Narrative</span>
                     </div>
-                    <div className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
-                       <span className="text-[10px] font-black text-indigo-300 uppercase italic tracking-widest">{dayTypeLabel}</span>
+                    <div className="px-4 py-1.5 bg-indigo-500/10 border border-indigo-500/30 rounded-lg">
+                       <span className="text-xs font-black text-indigo-300 uppercase italic tracking-widest">{dayTypeLabel}</span>
                     </div>
                   </div>
-                  <p className="text-xl lg:text-2xl font-black italic text-slate-100 leading-[1.4] tracking-tight">"{narrative}"</p>
+                  <p className="text-2xl lg:text-3xl font-black italic text-slate-100 leading-[1.4] tracking-tight">"{narrative}"</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className={`p-4 rounded-2xl border transition-all ${output?.bias?.toUpperCase().includes('LONG') ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' : 'bg-rose-500/5 border-rose-500/40 text-rose-400'}`}>
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2 block">System Bias</span>
-                  <div className="text-xl font-black tracking-widest italic">{output?.bias?.toUpperCase() || 'NEUTRAL'}</div>
+              <div className="grid grid-cols-2 gap-5">
+                <div className={`p-6 rounded-2xl border transition-all ${output?.bias?.toUpperCase().includes('LONG') ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' : 'bg-rose-500/5 border-rose-500/40 text-rose-400'}`}>
+                  <span className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] mb-3 block">System Bias</span>
+                  <div className="text-2xl font-black tracking-widest italic">{output?.bias?.toUpperCase() || 'NEUTRAL'}</div>
                 </div>
-                <div className="p-4 rounded-2xl border border-slate-800 bg-slate-900/40">
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2 block">AI Confidence</span>
-                  <div className="text-xl font-black text-slate-100 font-mono tracking-tighter">{output?.confidence || '0%'}</div>
+                <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/40">
+                  <span className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] mb-3 block">AI Confidence</span>
+                  <div className="text-2xl font-black text-slate-100 font-mono tracking-tighter">{output?.confidence || '0%'}</div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-6">
+              <div className="grid grid-cols-1 gap-8">
                  {output?.liquidity_sweeps && (
-                   <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-5 shadow-inner">
-                      <div className="flex items-center gap-2 mb-4 px-1 border-b border-slate-800 pb-2">
-                         <Crosshair className="w-3.5 h-3.5 text-indigo-400" />
-                         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Liquidity Sweeps Analysis</h4>
+                   <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6 shadow-inner">
+                      <div className="flex items-center gap-3 mb-5 px-1 border-b border-slate-800 pb-3">
+                         <Crosshair className="w-4 h-4 text-indigo-400" />
+                         <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Liquidity Sweeps Analysis</h4>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-2 gap-4">
                         {Object.entries(output.liquidity_sweeps).map(([key, sweep]: [string, any]) => (
-                          <div key={key} className="flex flex-col bg-slate-950/60 p-3 rounded-xl border border-slate-800/60 group hover:border-indigo-500/30 transition-all shadow-sm">
-                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">{key}</span>
-                                <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border leading-none ${
+                          <div key={key} className="flex flex-col bg-slate-950/60 p-4 rounded-xl border border-slate-800/60 group hover:border-indigo-500/30 transition-all shadow-sm">
+                             <div className="flex justify-between items-center mb-3">
+                                <span className="text-[11px] font-black text-slate-500 uppercase tracking-widest leading-none">{key}</span>
+                                <span className={`text-[10px] font-black px-2 py-1 rounded border leading-none ${
                                   sweep.status.toLowerCase().includes('reclaimed') ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400'
                                 }`}>{sweep.status.toUpperCase()}</span>
                              </div>
-                             <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="text-[10px] font-bold text-slate-300 truncate">{sweep.strength}</span>
-                                {sweep.level && <span className="text-[10px] font-mono text-indigo-400/60 ml-auto tabular-nums">{sweep.level}</span>}
+                             <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-[11px] font-bold text-slate-300 truncate">{sweep.strength}</span>
+                                {sweep.level && <span className="text-[11px] font-mono text-indigo-400/60 ml-auto tabular-nums">{sweep.level}</span>}
                              </div>
                           </div>
                         ))}
@@ -317,33 +317,33 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                    </div>
                  )}
 
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-5 shadow-inner">
-                       <div className="flex items-center gap-2 mb-3">
-                          <Eye className="w-3.5 h-3.5 text-indigo-400" />
-                          <h4 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Structural State</h4>
+                 <div className="grid grid-cols-2 gap-6">
+                    <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6 shadow-inner">
+                       <div className="flex items-center gap-3 mb-4">
+                          <Eye className="w-4 h-4 text-indigo-400" />
+                          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Structural State</h4>
                        </div>
-                       <p className="text-[11px] font-bold text-slate-200 leading-relaxed italic border-l-2 border-indigo-500 pl-3">
+                       <p className="text-sm font-bold text-slate-200 leading-relaxed italic border-l-2 border-indigo-500 pl-4">
                          {output?.value_acceptance || "Structural shift analysis pending..."}
                        </p>
                     </div>
-                    <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-5 shadow-inner">
-                       <div className="flex items-center gap-2 mb-3">
-                          <Layers className="w-3.5 h-3.5 text-indigo-400" />
-                          <h4 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">TPO Signals Read</h4>
+                    <div className="bg-slate-900/40 border border-slate-800/60 rounded-2xl p-6 shadow-inner">
+                       <div className="flex items-center gap-3 mb-4">
+                          <Layers className="w-4 h-4 text-indigo-400" />
+                          <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">TPO Signals Read</h4>
                        </div>
-                       <div className="space-y-2">
+                       <div className="space-y-3">
                           <div className="flex justify-between items-center">
-                             <span className="text-[8px] font-black text-slate-500 uppercase">Signals</span>
-                             <span className="text-[10px] font-black text-slate-100 uppercase">{output?.tpo_read?.profile_signals || "N/A"}</span>
+                             <span className="text-[10px] font-black text-slate-500 uppercase">Signals</span>
+                             <span className="text-xs font-black text-slate-100 uppercase">{output?.tpo_read?.profile_signals || "N/A"}</span>
                           </div>
                           <div className="flex justify-between items-center">
-                             <span className="text-[8px] font-black text-slate-500 uppercase">Migration</span>
-                             <span className="text-[10px] font-black text-indigo-400">{output?.tpo_read?.dpoc_migration || "STABLE"}</span>
+                             <span className="text-[10px] font-black text-slate-500 uppercase">Migration</span>
+                             <span className="text-xs font-black text-indigo-400">{output?.tpo_read?.dpoc_migration || "STABLE"}</span>
                           </div>
                           <div className="flex justify-between items-center">
-                             <span className="text-[8px] font-black text-slate-500 uppercase">Extreme</span>
-                             <span className="text-[10px] font-black text-amber-400 uppercase">{output?.tpo_read?.extreme_or_compression || "NONE"}</span>
+                             <span className="text-[10px] font-black text-slate-500 uppercase">Extreme</span>
+                             <span className="text-xs font-black text-amber-400 uppercase">{output?.tpo_read?.extreme_or_compression || "NONE"}</span>
                           </div>
                        </div>
                     </div>
@@ -351,16 +351,16 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
               </div>
 
               {reasoning.length > 0 && (
-                <div className="space-y-4 pt-6 border-t border-slate-800/60">
-                  <div className="flex items-center gap-2 mb-2">
-                     <Share2 className="w-4 h-4 text-indigo-500" />
-                     <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-400">Core Intelligence Points</h4>
+                <div className="space-y-5 pt-8 border-t border-slate-800/60">
+                  <div className="flex items-center gap-3 mb-3">
+                     <Share2 className="w-5 h-5 text-indigo-500" />
+                     <h4 className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Core Intelligence Points</h4>
                   </div>
-                  <div className="grid gap-3">
+                  <div className="grid gap-4">
                     {reasoning.map((item, i) => (
-                      <div key={i} className="flex gap-4 p-5 bg-slate-900/30 border border-slate-800/60 rounded-2xl group hover:bg-slate-800/40 transition-all shadow-md">
-                        <div className="mt-1 shrink-0 w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.6)] group-hover:scale-110 transition-transform" />
-                        <p className="text-[13px] font-semibold text-slate-100 leading-[1.6] tracking-wide antialiased">
+                      <div key={i} className="flex gap-5 p-6 bg-slate-900/30 border border-slate-800/60 rounded-2xl group hover:bg-slate-800/40 transition-all shadow-md">
+                        <div className="mt-1.5 shrink-0 w-3 h-3 rounded-full bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.6)] group-hover:scale-110 transition-transform" />
+                        <p className="text-[15px] font-semibold text-slate-100 leading-[1.6] tracking-wide antialiased">
                           {item}
                         </p>
                       </div>
@@ -372,11 +372,11 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
           )}
 
           {activeTab === 'pulse' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+              <div className="grid grid-cols-2 gap-5">
                  <ConfluenceCard title="Momentum Engine" icon={Zap}>
                     <LogicBadge label="RSI (14)" value={ib.rsi14?.toFixed(1) || 'N/A'} condition={ib.rsi14 > 50} />
-                    <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mt-2">
+                    <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-3">
                        <div className={`h-full transition-all duration-1000 ${ib.rsi14 > 70 ? 'bg-rose-500' : ib.rsi14 < 30 ? 'bg-emerald-500' : 'bg-indigo-500'}`} style={{ width: `${ib.rsi14}%` }} />
                     </div>
                  </ConfluenceCard>
@@ -386,7 +386,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                  </ConfluenceCard>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-5">
                  <ConfluenceCard title="IB Session Metrics" icon={Shield}>
                     <LogicBadge label="IB Status" value={ib.ib_status || 'OPEN'} />
                     <LogicBadge label="IB Range (Pts)" value={ib.ib_range?.toFixed(1) || '0.0'} />
@@ -396,39 +396,39 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                  <ConfluenceCard title="Technical Anchors" icon={Anchor}>
                     <LogicBadge label="VWAP" value={ib.current_vwap?.toFixed(1) || '0.0'} />
                     <LogicBadge label="Price vs VWAP" value={ib.price_vs_vwap} />
-                    <div className="pt-2 space-y-1">
-                       <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase">
+                    <div className="pt-3 space-y-2">
+                       <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase">
                           <span>EMA 20</span>
-                          <span className="text-slate-200 tabular-nums">{ib.ema20?.toFixed(1)}</span>
+                          <span className="text-slate-200 tabular-nums text-xs">{ib.ema20?.toFixed(1)}</span>
                        </div>
-                       <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase">
+                       <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase">
                           <span>EMA 50</span>
-                          <span className="text-slate-200 tabular-nums">{ib.ema50?.toFixed(1)}</span>
+                          <span className="text-slate-200 tabular-nums text-xs">{ib.ema50?.toFixed(1)}</span>
                        </div>
-                       <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase">
+                       <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase">
                           <span>EMA 200</span>
-                          <span className="text-slate-200 tabular-nums">{ib.ema200?.toFixed(1)}</span>
+                          <span className="text-slate-200 tabular-nums text-xs">{ib.ema200?.toFixed(1)}</span>
                        </div>
                     </div>
                  </ConfluenceCard>
               </div>
 
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-inner">
-                 <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                       <Timer className="w-4 h-4 text-indigo-400" />
-                       <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Intraday Wick Profile</h4>
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 shadow-inner">
+                 <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-3">
+                       <Timer className="w-5 h-5 text-indigo-400" />
+                       <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Intraday Wick Profile</h4>
                     </div>
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Window: 15m Lookback</span>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Window: 15m Lookback</span>
                  </div>
-                 <div className="grid grid-cols-2 gap-8">
-                    <div className="text-center group p-4 rounded-xl hover:bg-emerald-500/5 transition-colors">
-                       <span className="text-[48px] font-black text-emerald-400 block leading-none mb-2 tracking-tighter drop-shadow-sm">{wicks.bullish_wick_parade_count || 0}</span>
-                       <span className="text-[9px] font-black uppercase text-emerald-500/60 tracking-[0.2em]">Bullish Pressure</span>
+                 <div className="grid grid-cols-2 gap-10">
+                    <div className="text-center group p-5 rounded-xl hover:bg-emerald-500/5 transition-colors">
+                       <span className="text-[56px] font-black text-emerald-400 block leading-none mb-3 tracking-tighter drop-shadow-sm">{wicks.bullish_wick_parade_count || 0}</span>
+                       <span className="text-[11px] font-black uppercase text-emerald-500/60 tracking-[0.2em]">Bullish Pressure</span>
                     </div>
-                    <div className="text-center border-l border-slate-800 group p-4 rounded-xl hover:bg-rose-500/5 transition-colors">
-                       <span className="text-[48px] font-black text-rose-400 block leading-none mb-2 tracking-tighter drop-shadow-sm">{wicks.bearish_wick_parade_count || 0}</span>
-                       <span className="text-[9px] font-black uppercase text-rose-500/60 tracking-[0.2em]">Bearish Pressure</span>
+                    <div className="text-center border-l border-slate-800 group p-5 rounded-xl hover:bg-rose-500/5 transition-colors">
+                       <span className="text-[56px] font-black text-rose-400 block leading-none mb-3 tracking-tighter drop-shadow-sm">{wicks.bearish_wick_parade_count || 0}</span>
+                       <span className="text-[11px] font-black uppercase text-rose-500/60 tracking-[0.2em]">Bearish Pressure</span>
                     </div>
                  </div>
               </div>
@@ -436,8 +436,8 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
           )}
 
           {activeTab === 'logic' && (
-             <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4">
-                <div className="space-y-4">
+             <div className="grid grid-cols-2 gap-5 animate-in fade-in slide-in-from-right-4">
+                <div className="space-y-5">
                   <ConfluenceCard title="IB Acceptance" icon={Shield}>
                     <LogicBadge label="Close > IB High" value={core.ib_acceptance?.close_above_ibh} />
                     <LogicBadge label="Close < IB Low" value={core.ib_acceptance?.close_below_ibl} />
@@ -458,7 +458,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   </ConfluenceCard>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <ConfluenceCard title="Price Location" icon={Target}>
                     <LogicBadge label="Upper Third" value={core.price_location?.in_upper_third} />
                     <LogicBadge label="Middle Third" value={core.price_location?.in_middle} />
@@ -482,17 +482,17 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 </div>
 
                 {core.note && (
-                  <div className="col-span-2 p-5 bg-slate-900/60 border border-slate-800 rounded-xl shadow-inner border-l-4 border-indigo-500/60">
-                     <h5 className="text-[9px] font-black text-slate-500 uppercase mb-2">Architectural Logic Note</h5>
-                     <p className="text-[11px] font-bold text-slate-300 leading-relaxed italic">"{core.note}"</p>
+                  <div className="col-span-2 p-6 bg-slate-900/60 border border-slate-800 rounded-xl shadow-inner border-l-4 border-indigo-500/60">
+                     <h5 className="text-[11px] font-black text-slate-500 uppercase mb-3">Architectural Logic Note</h5>
+                     <p className="text-sm font-bold text-slate-300 leading-relaxed italic">"{core.note}"</p>
                   </div>
                 )}
              </div>
           )}
 
           {activeTab === 'migration' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+              <div className="grid grid-cols-2 gap-5">
                  <StatBox label="Net Shift (pts)" value={migData.net_migration_pts || migData.steps_since_1030 || '0'} colorClass="text-indigo-400" />
                  <StatBox label="Relative Retain %" value={`${(migData.relative_retain_percent || 0).toFixed(1)}%`} colorClass="text-cyan-400" />
               </div>
@@ -503,34 +503,34 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                  <LogicBadge label="Regime" value={migData.dpoc_regime || 'NEUTRAL'} />
               </ConfluenceCard>
               
-              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5">
-                 <div className="flex items-center gap-2 mb-4 px-1">
-                    <History className="w-4 h-4 text-indigo-400" />
-                    <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">DPOC Migration History Log</h4>
+              <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6">
+                 <div className="flex items-center gap-3 mb-5 px-1">
+                    <History className="w-5 h-5 text-indigo-400" />
+                    <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">DPOC Migration History Log</h4>
                  </div>
-                 <div className="space-y-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                 <div className="space-y-3 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
                     {migData.dpoc_history && migData.dpoc_history.length > 0 ? (
                       migData.dpoc_history.map((step: DPOCStep, i: number) => (
-                        <div key={i} className={`flex items-center justify-between p-3 rounded-xl border ${step.jump ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-slate-950/40 border-slate-800/60'}`}>
-                           <div className="flex items-center gap-4">
-                              <span className="text-[10px] font-black text-slate-500 tabular-nums">{step.slice}</span>
+                        <div key={i} className={`flex items-center justify-between p-4 rounded-xl border ${step.jump ? 'bg-indigo-500/10 border-indigo-500/30' : 'bg-slate-950/40 border-slate-800/60'}`}>
+                           <div className="flex items-center gap-5">
+                              <span className="text-[11px] font-black text-slate-500 tabular-nums">{step.slice}</span>
                               <div className="flex flex-col">
-                                 <span className="text-[12px] font-black font-mono text-slate-100 tabular-nums">{step.dpoc.toFixed(1)}</span>
-                                 <span className="text-[8px] font-black text-slate-500 uppercase">{step.developing ? 'DEVELOPING' : 'SETTLED'}</span>
+                                 <span className="text-sm font-black font-mono text-slate-100 tabular-nums">{step.dpoc.toFixed(1)}</span>
+                                 <span className="text-[10px] font-black text-slate-500 uppercase">{step.developing ? 'DEVELOPING' : 'SETTLED'}</span>
                               </div>
                            </div>
-                           <div className="flex items-center gap-3">
-                              <span className={`text-[10px] font-black tabular-nums ${step.delta_pts > 0 ? 'text-emerald-400' : step.delta_pts < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                           <div className="flex items-center gap-4">
+                              <span className={`text-[11px] font-black tabular-nums ${step.delta_pts > 0 ? 'text-emerald-400' : step.delta_pts < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
                                  {step.delta_pts > 0 ? '+' : ''}{step.delta_pts.toFixed(1)}
                               </span>
-                              {step.jump && <Flash className="w-3.5 h-3.5 text-amber-400 animate-pulse" />}
+                              {step.jump && <Flash className="w-4 h-4 text-amber-400 animate-pulse" />}
                            </div>
                         </div>
                       ))
                     ) : (
-                      <div className="py-10 text-center opacity-20 italic">
-                         <IterationCcw className="w-10 h-10 mx-auto mb-3" />
-                         <span className="text-[10px] font-black uppercase tracking-widest">No migration steps recorded.</span>
+                      <div className="py-12 text-center opacity-20 italic">
+                         <IterationCcw className="w-12 h-12 mx-auto mb-4" />
+                         <span className="text-xs font-black uppercase tracking-widest">No migration steps recorded.</span>
                       </div>
                     )}
                  </div>
@@ -539,54 +539,72 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
           )}
 
           {activeTab === 'globex' && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-               <ConfluenceCard title="Premarket Architecture" icon={Globe}>
-                  <LogicBadge label="Asia High/Low" value={`${premarket.asia_high} / ${premarket.asia_low}`} />
-                  <LogicBadge label="London High/Low" value={`${premarket.london_high} / ${premarket.london_low}`} />
-                  <LogicBadge label="Overnight High/Low" value={`${premarket.overnight_high} / ${premarket.overnight_low}`} />
-                  <LogicBadge label="Prev Day High/Low" value={`${premarket.previous_day_high} / ${premarket.previous_day_low}`} />
-               </ConfluenceCard>
-               <ConfluenceCard title="Structural Health" icon={Flash}>
-                  <LogicBadge label="Compression Ratio" value={premarket.compression_ratio?.toFixed(3) || '0.000'} condition={premarket.compression_flag} />
-                  <LogicBadge label="SMT Preopen" value={premarket.smt_preopen} />
-                  <LogicBadge label="Range Status" value={premarket.compression_flag ? 'COMPRESSED' : 'EXPANDED'} condition={!premarket.compression_flag} />
-               </ConfluenceCard>
+            <div className="grid grid-cols-2 gap-5 animate-in fade-in slide-in-from-right-4">
+               <div className="space-y-5">
+                 <ConfluenceCard title="Pre-market Ranges" icon={Globe}>
+                    <LogicBadge label="Asia High/Low" value={`${premarket.asia_high} / ${premarket.asia_low}`} />
+                    <LogicBadge label="London High/Low" value={`${premarket.london_high} / ${premarket.london_low}`} />
+                    <LogicBadge label="London Range" value={premarket.london_range?.toFixed(2) || '0.00'} />
+                    <LogicBadge label="Overnight High/Low" value={`${premarket.overnight_high} / ${premarket.overnight_low}`} />
+                    <LogicBadge label="Overnight Range" value={premarket.overnight_range?.toFixed(2) || '0.00'} />
+                 </ConfluenceCard>
+                 <ConfluenceCard title="Session Extremes" icon={Layers}>
+                    <LogicBadge label="Prev Day High" value={premarket.previous_day_high?.toFixed(2) || '0.00'} />
+                    <LogicBadge label="Prev Day Low" value={premarket.previous_day_low?.toFixed(2) || '0.00'} />
+                    <LogicBadge label="Prev Week High" value={premarket.previous_week_high?.toFixed(2) || '0.00'} />
+                    <LogicBadge label="Prev Week Low" value={premarket.previous_week_low?.toFixed(2) || '0.00'} />
+                 </ConfluenceCard>
+               </div>
+               <div className="space-y-5">
+                 <ConfluenceCard title="Structural Health" icon={Flash}>
+                    <LogicBadge label="Compression Flag" value={premarket.compression_flag ? 'TRUE' : 'FALSE'} condition={!premarket.compression_flag} />
+                    <LogicBadge label="Compression Ratio" value={premarket.compression_ratio?.toFixed(3) || '0.000'} condition={premarket.compression_ratio > 1} />
+                    <LogicBadge label="SMT Preopen" value={premarket.smt_preopen} />
+                    <LogicBadge label="Range Status" value={premarket.compression_flag ? 'COMPRESSED' : 'EXPANDED'} condition={!premarket.compression_flag} />
+                 </ConfluenceCard>
+                 <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-xl shadow-inner border-l-4 border-indigo-500/60">
+                    <h5 className="text-[11px] font-black text-slate-500 uppercase mb-3">Architectural Context</h5>
+                    <p className="text-sm font-bold text-slate-300 leading-relaxed italic">
+                      "Premarket data establishes the initial distribution boundaries. Asia/London ranges often serve as liquidity magnets during regular session hours."
+                    </p>
+                 </div>
+               </div>
             </div>
           )}
 
           {activeTab === 'gaps' && (
-             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                <div className="flex items-center gap-2 mb-2">
-                   <SearchCode className="w-4 h-4 text-indigo-400" />
-                   <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-200">Active FVG Matrix</h4>
+             <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+                <div className="flex items-center gap-3 mb-3">
+                   <SearchCode className="w-5 h-5 text-indigo-400" />
+                   <h4 className="text-xs font-black uppercase tracking-[0.3em] text-slate-200">Active FVG Matrix</h4>
                 </div>
                 {Object.entries(fvgs).filter(([_, list]) => Array.isArray(list) && list.length > 0).length === 0 ? (
-                  <div className="py-24 flex flex-col items-center opacity-30 select-none italic">
-                     <Ghost className="w-16 h-16 mb-4 text-slate-600" />
-                     <span className="text-[11px] font-black uppercase tracking-[0.5em] text-slate-500">Structural Gaps Empty</span>
+                  <div className="py-32 flex flex-col items-center opacity-30 select-none italic">
+                     <Ghost className="w-20 h-20 mb-5 text-slate-600" />
+                     <span className="text-xs font-black uppercase tracking-[0.5em] text-slate-500">Structural Gaps Empty</span>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     {Object.entries(fvgs).map(([tf, list]) => {
                       if (!Array.isArray(list) || list.length === 0) return null;
                       const tfLabel = tf.replace('_', ' ').toUpperCase();
                       return (
-                        <div key={tf} className="bg-slate-900/40 border border-slate-800 rounded-2xl p-5 shadow-sm">
-                           <div className="flex items-center justify-between mb-4 border-b border-slate-800/60 pb-2">
-                             <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">{tfLabel} Array</span>
-                             <BadgeInfo className="w-3.5 h-3.5 text-slate-600" />
+                        <div key={tf} className="bg-slate-900/40 border border-slate-800 rounded-2xl p-6 shadow-sm">
+                           <div className="flex items-center justify-between mb-5 border-b border-slate-800/60 pb-3">
+                             <span className="text-[11px] font-black text-indigo-400 uppercase tracking-widest">{tfLabel} Array</span>
+                             <BadgeInfo className="w-4 h-4 text-slate-600" />
                            </div>
-                           <div className="space-y-2.5">
+                           <div className="space-y-3">
                               {list.map((gap: FVG, idx: number) => (
-                                <div key={idx} className={`flex items-center justify-between p-3 rounded-xl border group transition-all ${gap.type === 'bullish' ? 'bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40' : 'bg-rose-500/5 border-rose-500/20 hover:border-rose-500/40'}`}>
-                                   <div className="flex items-center gap-4">
-                                      {gap.type === 'bullish' ? <MoveUp className="w-3.5 h-3.5 text-emerald-400" /> : <MoveDown className="w-3.5 h-3.5 text-rose-400" />}
+                                <div key={idx} className={`flex items-center justify-between p-4 rounded-xl border group transition-all ${gap.type === 'bullish' ? 'bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40' : 'bg-rose-500/5 border-rose-500/20 hover:border-rose-500/40'}`}>
+                                   <div className="flex items-center gap-5">
+                                      {gap.type === 'bullish' ? <MoveUp className="w-4 h-4 text-emerald-400" /> : <MoveDown className="w-4 h-4 text-rose-400" />}
                                       <div className="flex flex-col">
-                                         <span className="text-[12px] font-black font-mono text-slate-100 tabular-nums tracking-tighter">{gap.bottom.toFixed(1)} - {gap.top.toFixed(1)}</span>
-                                         <span className="text-[8px] font-black text-slate-500 uppercase">{gap.time || 'ACTIVE'}</span>
+                                         <span className="text-sm font-black font-mono text-slate-100 tabular-nums tracking-tighter">{gap.bottom.toFixed(1)} - {gap.top.toFixed(1)}</span>
+                                         <span className="text-[10px] font-black text-slate-500 uppercase">{gap.time || 'ACTIVE'}</span>
                                       </div>
                                    </div>
-                                   <div className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${gap.type === 'bullish' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                                   <div className={`px-2.5 py-1 rounded text-[10px] font-black uppercase ${gap.type === 'bullish' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
                                       {gap.type}
                                    </div>
                                 </div>
@@ -601,43 +619,43 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
           )}
 
           {activeTab === 'profile' && (
-            <div className="h-full flex flex-col gap-4 animate-in fade-in slide-in-from-right-4">
-              <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-2xl border border-slate-800 shadow-lg">
-                 <div className="flex items-center gap-3">
-                    <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20 shadow-sm"><BarChartHorizontal className="w-5 h-5 text-indigo-400" /></div>
+            <div className="h-full flex flex-col gap-5 animate-in fade-in slide-in-from-right-4">
+              <div className="flex items-center justify-between bg-slate-900/80 p-5 rounded-2xl border border-slate-800 shadow-lg">
+                 <div className="flex items-center gap-4">
+                    <div className="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/20 shadow-sm"><BarChartHorizontal className="w-6 h-6 text-indigo-400" /></div>
                     <div>
-                      <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-100">Structural Profile Analysis</h3>
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Composite TPO Distribution</p>
+                      <h3 className="text-sm font-black uppercase tracking-[0.2em] text-slate-100">Structural Profile Analysis</h3>
+                      <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Composite TPO Distribution</p>
                     </div>
                  </div>
-                 <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800/60">
+                 <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-800/60">
                     <div className="flex items-center gap-1 bg-slate-900 rounded-lg p-0.5 border border-slate-800/40 mr-2">
                       <button 
                         onClick={() => setTpoResolution('30m')}
-                        className={`px-3 py-1 rounded text-[9px] font-black transition-all ${tpoResolution === '30m' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`px-4 py-1.5 rounded text-[11px] font-black transition-all ${tpoResolution === '30m' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
                       >
                         30M
                       </button>
                       <button 
                         onClick={() => setTpoResolution('5m')}
-                        className={`px-3 py-1 rounded text-[9px] font-black transition-all ${tpoResolution === '5m' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                        className={`px-4 py-1.5 rounded text-[11px] font-black transition-all ${tpoResolution === '5m' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
                       >
                         5M
                       </button>
                     </div>
                    <button 
                      onClick={() => setShowTPOPrints(!showTPOPrints)} 
-                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${showTPOPrints ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${showTPOPrints ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                    >
-                     <TypeIcon className="w-3.5 h-3.5" />
-                     <span className="text-[9px] font-black uppercase">TPO</span>
+                     <TypeIcon className="w-4 h-4" />
+                     <span className="text-[11px] font-black uppercase">TPO</span>
                    </button>
                    <button 
                      onClick={() => setShowVolumeBars(!showVolumeBars)} 
-                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${showVolumeBars ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${showVolumeBars ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
                    >
-                     <Layers className="w-3.5 h-3.5" />
-                     <span className="text-[9px] font-black uppercase">VOL</span>
+                     <Layers className="w-4 h-4" />
+                     <span className="text-[11px] font-black uppercase">VOL</span>
                    </button>
                  </div>
               </div>
@@ -660,18 +678,18 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
           {activeTab === 'thinking' && (
              <div className="h-full flex flex-col animate-in fade-in zoom-in-95">
-               <div className="flex-1 bg-slate-900/95 border-l-4 border-indigo-600 font-mono text-[13px] leading-relaxed text-slate-300 overflow-y-auto whitespace-pre-wrap shadow-2xl selection:bg-indigo-500/30 selection:text-white p-10 custom-scrollbar flex flex-col">
+               <div className="flex-1 bg-slate-900/95 border-l-4 border-indigo-600 font-mono text-[14px] leading-relaxed text-slate-300 overflow-y-auto whitespace-pre-wrap shadow-2xl selection:bg-indigo-500/30 selection:text-white p-12 custom-scrollbar flex flex-col">
                  <div className="flex items-center gap-4 mb-8 text-indigo-400 border-b border-indigo-500/20 pb-6 shrink-0">
-                   <div className="p-3 bg-indigo-500/10 rounded-xl border border-indigo-500/20"><Terminal className="w-6 h-6" /></div>
+                   <div className="p-4 bg-indigo-500/10 rounded-xl border border-indigo-500/20"><Terminal className="w-7 h-7" /></div>
                    <div className="flex flex-col">
-                      <span className="text-[11px] font-black uppercase tracking-[0.4em]">Intelligence Reasoning Engine</span>
-                      <span className="text-[9px] font-black text-indigo-500/60 uppercase tracking-widest">Logic Trace Output [RAW]</span>
+                      <span className="text-sm font-black uppercase tracking-[0.4em]">Intelligence Reasoning Engine</span>
+                      <span className="text-[11px] font-black text-indigo-500/60 uppercase tracking-widest">Logic Trace Output [RAW]</span>
                    </div>
                  </div>
                  <div className="flex-1">
                    {output?.thinking || snapshot?.thinking || "Awaiting intelligence stream initialization..."}
                  </div>
-                 <div className="mt-10 pt-6 border-t border-slate-800/40 text-[9px] font-black text-slate-600 uppercase tracking-widest shrink-0 flex justify-between items-center">
+                 <div className="mt-12 pt-6 border-t border-slate-800/40 text-[10px] font-black text-slate-600 uppercase tracking-widest shrink-0 flex justify-between items-center">
                     <span>Process ID: {Math.random().toString(36).substring(7).toUpperCase()}</span>
                     <span>Status: LOG_STREAM_ACTIVE</span>
                  </div>
