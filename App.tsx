@@ -2,17 +2,16 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
-import { rawSnapshots } from './mockData';
 import { GoogleGenAI } from "@google/genai";
-import { 
-  Clock, 
-  LayoutDashboard, 
-  Database, 
-  RefreshCw, 
+import {
+  Clock,
+  LayoutDashboard,
+  Database,
+  RefreshCw,
   Timer,
   BrainCircuit,
   Sparkles,
-  Wifi, 
+  Wifi,
   WifiOff,
   Activity,
   Zap,
@@ -25,11 +24,19 @@ import {
   PlayCircle
 } from 'lucide-react';
 
-const GITHUB_REPO = "LePhanFF/RockitDataFeed";
-const BASE_URL = "https://api.github.com/repos";
-const RAW_URL = "https://raw.githubusercontent.com";
-const LOCAL_PATH = "local-analysis-format";
-const REFRESH_INTERVAL_SEC = 120; 
+// Google Cloud Storage configuration
+const GCS_BUCKET = "rockit-data";
+const GCS_BASE_URL = "https://storage.googleapis.com/storage/v1/b";
+const REFRESH_INTERVAL_SEC = 120;
+
+// GCS Configuration
+// Note: For production use, implement proper authentication via a backend service
+// This implementation assumes public read access to the bucket or uses a proxy
+const getGCSAuthHeaders = async (): Promise<Record<string, string>> => {
+  // For public buckets, return empty headers
+  // For authenticated access, implement JWT signing in a backend service
+  return {};
+};
 
 const hardenedClean = (raw: string): string => {
   let text = raw.trim();
@@ -156,21 +163,19 @@ const App: React.FC = () => {
   const fetchFileList = async (isAutoRefresh = false) => {
     if (!isAutoRefresh) setIsLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/${GITHUB_REPO}/contents/${LOCAL_PATH}?t=${Date.now()}`);
-      
-      if (res.status === 403 || res.status === 429) {
-        setIsRateLimited(true);
-        throw new Error("GitHub Rate Limit Active");
-      }
+      const headers = await getGCSAuthHeaders();
+      const res = await fetch(`${GCS_BASE_URL}/${GCS_BUCKET}/o?prefix=local-analysis-format/`, {
+        headers
+      });
 
-      if (!res.ok) throw new Error(`Source connection failed: ${res.statusText}`);
-      
+      if (!res.ok) throw new Error(`GCS connection failed: ${res.statusText}`);
+
       const data = await res.json();
-      const files = data
-        .filter((f: any) => f.name.endsWith('.json') || f.name.endsWith('.jsonl'))
-        .map((f: any) => f.name)
+      const files = data.items
+        .filter((item: any) => item.name.endsWith('.json') || item.name.endsWith('.jsonl'))
+        .map((item: any) => item.name.replace('local-analysis-format/', ''))
         .sort((a: string, b: string) => b.localeCompare(a));
-      
+
       setAvailableFiles(files);
       setConnectionStatus('online');
       setIsRateLimited(false);
@@ -184,14 +189,10 @@ const App: React.FC = () => {
         }
       }
     } catch (err: any) {
-      console.warn("Fetch Error:", err.message);
+      console.warn("GCS Fetch Error:", err.message);
       setError(err.message);
       setConnectionStatus('offline');
-      
-      if (err.message.includes("Rate Limit")) {
-        setIsRateLimited(true);
-      }
-      
+
       if (selectedFile && !isDemoMode) {
         handleFileSelect(selectedFile, true);
       } else if (snapshots.length === 0 && !isDemoMode && availableFiles.length === 0) {
@@ -207,8 +208,138 @@ const App: React.FC = () => {
     setIsDemoMode(true);
     setSelectedFile("DEMO_2025_MOCK.json");
     setAvailableFiles(["DEMO_2025_MOCK.json"]);
-    setSnapshots(rawSnapshots);
-    setSelectedIndex(rawSnapshots.length - 1);
+
+    // Create a simple demo snapshot
+    const demoSnapshot = {
+      input: {
+        session_date: "2025-12-31",
+        current_et_time: "09:30",
+        premarket: {
+          asia_high: 25658.25,
+          asia_low: 25576.5,
+          london_high: 25603.5,
+          london_low: 25552.5,
+          london_range: 51.0,
+          overnight_high: 25716.75,
+          overnight_low: 25561.0,
+          overnight_range: 155.75,
+          previous_day_high: 25793.75,
+          previous_day_low: 25668.25,
+          previous_week_high: 25935.25,
+          previous_week_low: 25608.25,
+          compression_flag: true,
+          compression_ratio: 0.327,
+          smt_preopen: "neutral"
+        },
+        intraday: {
+          ib: {
+            ib_status: "complete",
+            ib_high: 25698.75,
+            ib_low: 25678.5,
+            ib_range: 20.25,
+            ib_mid: 25688.62,
+            price_vs_ib: "lower_third_hug",
+            price_vs_vwap: "above",
+            current_close: 25678.5,
+            current_open: 25695.0,
+            current_high: 25698.75,
+            current_low: 25678.5,
+            current_volume: 1906,
+            current_vwap: 25628.26,
+            ema20: 25670.64,
+            ema50: 25639.24,
+            ema200: 25632.04,
+            rsi14: 60.8,
+            atr14: 12.18
+          },
+          wick_parade: {
+            bullish_wick_parade_count: 7,
+            bearish_wick_parade_count: 6
+          },
+          dpoc_migration: {
+            dpoc_slices: [{"time": "09:30", "dpoc": 25678.5}],
+            migration_direction: "up",
+            steps_since_1030: 77.0,
+            note: "DPOC migration = final arbiter for bias (Universal Oath)"
+          },
+          volume_profile: {
+            current_session: {
+              poc: 25678.25,
+              vah: 25678.25,
+              val: 25678.25,
+              high: 25698.75,
+              low: 25678.5,
+              hvn_nodes: [25678.25],
+              lvn_nodes: [25678.5, 25678.75, 25679.0]
+            },
+            previous_day: {
+              poc: 25720.25,
+              vah: 25782.0,
+              val: 25672.0,
+              high: 25793.75,
+              low: 25668.25,
+              hvn_nodes: [25720.25, 25691.0, 25736.25],
+              lvn_nodes: [25668.0, 25668.25, 25668.5]
+            },
+            previous_3_days: {
+              poc: 25720.25,
+              vah: 25929.5,
+              val: 25658.5,
+              high: 25935.25,
+              low: 25648.0,
+              hvn_nodes: [25720.25, 25796.25, 25695.25],
+              lvn_nodes: [25647.75, 25648.0, 25648.25]
+            }
+          },
+          tpo_profile: {
+            current_poc: 25678.5,
+            current_vah: 25698.5,
+            current_val: 25678.5,
+            single_prints_above_vah: 1,
+            single_prints_below_val: 0,
+            fattening_zone: "below_val",
+            tpo_shape: "b_shape"
+          },
+          ninety_min_pd_arrays: {
+            ninety_min_high: 25698.75,
+            ninety_min_low: 25678.5,
+            equilibrium_50: 25688.62,
+            current_in_discount: 1,
+            current_in_premium: 0,
+            expansion_status: "inside",
+            bias_potential: "bullish"
+          },
+          fvg_detection: {
+            daily_fvg: [],
+            "4h_fvg": [],
+            "1h_fvg": [{"type": "bullish", "top": 25678.5, "bottom": 25632.0, "time": "2025-12-31 09:00"}],
+            "90min_fvg": [],
+            "15min_fvg": [],
+            "5min_fvg": []
+          }
+        },
+        core_confluences: {
+          ib_acceptance: {
+            close_above_ibh: false,
+            close_below_ibl: false,
+            price_accepted_higher: "No",
+            price_accepted_lower: "No"
+          },
+          dpoc_compression: {
+            compressing_against_vah: true,
+            compressing_against_val: true,
+            compression_bias: "aggressive_bullish"
+          },
+          price_location: {
+            location_label: "lower_third_hug"
+          }
+        }
+      },
+      output: `{"day_type": {"type": "Trend Up", "timestamp": "2025-12-31 / 09:30"}, "bias": "LONG", "liquidity_sweeps": {"asia": {"status": "Held", "strength": "None"}, "ib": {"status": "Reclaimed", "strength": "Engulfed"}}, "value_acceptance": "VA [skewed up] | POC location [mid] | Acceptance above VAH", "tpo_read": {"profile_signals": "Upper fattening", "dpoc_migration": "DPOC migration [up] X 77.0 pts", "extreme_or_compression": "extreme bullish shift"}, "confidence": "93%", "day_type_reasoning": ["IB complete with upper hug", "DPOC migrated 77 points upper", "Lack of bearish signals"], "one_liner": "IB upper reclaim + DPOC upper migration = aggressive bullish trend"}`
+    };
+
+    setSnapshots([demoSnapshot]);
+    setSelectedIndex(0);
   };
 
   const handleFileSelect = async (fileName: string, isUpdate = false) => {
@@ -216,7 +347,7 @@ const App: React.FC = () => {
        loadDemoMode();
        return;
     }
-    
+
     setIsDemoMode(false);
     setSelectedFile(fileName);
     if (!isUpdate) {
@@ -224,8 +355,12 @@ const App: React.FC = () => {
       setAiAudit(null);
     }
     try {
-      const res = await fetch(`${RAW_URL}/${GITHUB_REPO}/main/${LOCAL_PATH}/${fileName}?t=${Date.now()}`);
-      if (!res.ok) throw new Error("Data stream interrupted");
+      const headers = await getGCSAuthHeaders();
+      const objectName = `local-analysis-format/${fileName}`;
+      const res = await fetch(`https://storage.googleapis.com/${GCS_BUCKET}/${objectName}`, {
+        headers
+      });
+      if (!res.ok) throw new Error("GCS data stream interrupted");
       const text = await res.text();
       let newSnapshots: any[] = [];
       if (fileName.endsWith('.jsonl')) {
@@ -237,15 +372,15 @@ const App: React.FC = () => {
         newSnapshots = Array.isArray(data) ? data : [data];
       }
       setSnapshots(newSnapshots);
-      
+
       if (!isUpdate) {
         setSelectedIndex(newSnapshots.length - 1);
       } else if (selectedIndex >= newSnapshots.length) {
         setSelectedIndex(newSnapshots.length - 1);
       }
     } catch (err: any) {
-      console.error("Stream Error:", err.message);
-      if (!isUpdate) setError(`Stream Error: ${err.message}`);
+      console.error("GCS Stream Error:", err.message);
+      if (!isUpdate) setError(`GCS Stream Error: ${err.message}`);
     } finally {
       if (!isUpdate) setIsLoading(false);
     }
@@ -255,7 +390,7 @@ const App: React.FC = () => {
     if (!snapshots.length) return;
     setIsAuditing(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+      const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY || '' });
       const history = processedSnapshots.map(s => ({ t: s.input.current_et_time, b: s.decoded?.bias, d: s.decoded?.day_type?.type }));
       const prompt = `Review market evolution: ${JSON.stringify(history)}. Summarize shifts. Return JSON: {"summary": string, "shifts": string[]}`;
       const response = await ai.models.generateContent({

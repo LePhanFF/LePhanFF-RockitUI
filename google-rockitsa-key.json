@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "gen-lang-client-0679464891",
+  "private_key_id": "4d7289328afe224f3932e3591f8ffed7e4d9f338",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDL3AqRnWBoAosI\nhfXY4r1zG4jId8UyLCO1Swp5OscL87r1gYiMD6RYZ2VG9HJzCYkIf7oUtRxa/293\n+TnBOTeaufrWIIXRSELoblYP0utkD2jc/tTFx1I7Qy3WAVYYKnwC76gv4PyUw8Dz\ncfe9yc5ZRZav7EXbDRMjWCVJCaurE/C2X122wfPgbKgS+dkMni5Oxft01MQQwzfm\nGDuay47qw8Iem9Bx9Bz2W1EwLf7PQaYEmdW/OahwK0TnblexePq79nQtwkf0IP24\nQK432geRwWCcxCpN4sN8tpTq1J59kUi9LlmItmkWPSwEiPDw4nt0CGkX0ulxucE8\nohC5jlN7AgMBAAECggEARbPOyUsOE4ILF7b2AFpGfH0Fn8WT3zvIWcx2oEzAkg2b\n9yV7EqimgLOZpVEfcMXp3MYPUdU7BMIh0tucK7zsjjLY2S31k0Ep318aff6YDXZX\nXHilN5qXOzwVB/8c+NZN4JMg5n3+3r6v0o09L984dr2ccDpRCDzINmWFGhv8Xlmu\ny8iO3bN89nNEOEInij5E5F2tAPPy3uxhWpONz+Uct6f7628bkNukMGNLbrmdGKeu\nHWaCV8p7Ap2/e5blyTYbHsjcGHY8Nh/GghZQtfCb8qRUU30Ms+/5So9eX6DL611v\nK2piUPjrQYYHSvhP3uslo8L0qhq14dX4UlhQHBRqQQKBgQDpB0HSW8m/uUxxJSOT\n1zRfTsmQknXnhvQ0brfrKZzcBsPuly8p8llQTsnwdNdqdVJzmZzx7aEAYB6xUpH1\nJXS1ZaLCpjkp+5kFv0hyFb/JksEoSWPU/eJTHtwQ+2hGybicUYZrv2QFeFlE7X/s\nk0JlfVDi1YCkYbU3DVAO5NALDQKBgQDf9KzSqgAIiOq3qmfGZGp1T3ib411yZRN3\nRuFcYCY82BBrY9Y5X0J0C75kdLkPhvAf/UKJWy74hjcknI5/+aW3zOnS9xp5f+8x\ncHXfUVbQ7HG+3NHvq0C40IxFEPmZpJFbEYWXA2mlk6OkXAstmBWRoojQ9o+wIGzM\nQrBkH3QWpwKBgGE4I9/tZ3hTiG7T/cnaSQFST4m/cO1NQmj1oEm+LLEnKWtLK+Qm\nNdjpZhqpxI2nsOSFvBK6/ya281cribVrEQv1ATiQPN0lGKxrJ4BhToh8b5WtOLdN\nzLS89TcojFKsKhcddCVTzhjyItw88dfzgAnzhGF+jZMHKKF1LmdoUtupAoGBAKHm\nDj2omaeR2yR1MtoP44n0rnr7LaWx/hV/DxGpjFr100DfBpGpFLAxgSy72MCpytNF\nUaFcYqNU225DIxzOy4cIwow5CFGHM9Jouz16XqlgFIZmuflpsrsoQA75y4bPmijc\njNdzpx8EkQsTYx1N0WHbvs5ZP9ySRDSRjVSEDHcHAoGBAJNPnXGspORvY0rwdmAd\nh9o4Mn43eI1Fjr2UMkgJ7rNi0VDi7j7jYjCvmWAzYoHU0gwJqvVBNMrnpuNN6ToB\nFoPHxDe5XBqyFIZGiDvSM0TxJHVv0CwS1ouMIrYPhOefL8pUhMcVrH+J0IdTPVl8\nqvK0KXLYwISM86vV+c4jd9eJ\n-----END PRIVATE KEY-----\n",
+  "client_email": "rockit-uploader-sa@gen-lang-client-0679464891.iam.gserviceaccount.com",
+  "client_id": "117464075235437403869",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/rockit-uploader-sa%40gen-lang-client-0679464891.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
