@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
@@ -14,11 +15,15 @@ import {
   Timer,
   BrainCircuit,
   Sparkles,
-  Wifi,
+  Wifi, 
   WifiOff,
   Activity,
   ChevronRight,
-  Zap
+  Zap,
+  Calendar,
+  Layers,
+  FileJson,
+  Cpu
 } from 'lucide-react';
 
 const GITHUB_REPO = "LePhanFF/RockitDataFeed";
@@ -73,7 +78,6 @@ const salvageIntel = (raw: string): Partial<DecodedOutput> => {
   const vaMatch = raw.match(/"value_acceptance"\s*:\s*"(.*?)"/i);
   if (vaMatch) salvaged.value_acceptance = vaMatch[1].trim();
 
-  // Liquidity Sweep salvaging with support for 'level'
   const sweepsMatch = raw.match(/"liquidity_sweeps"\s*:\s*(\{[\s\S]*?\})/i);
   if (sweepsMatch) {
     try {
@@ -82,7 +86,6 @@ const salvageIntel = (raw: string): Partial<DecodedOutput> => {
       const sessions = ["asia", "london", "overnight", "previous_day", "previous_week", "ib"];
       const sweeps: any = {};
       sessions.forEach(s => {
-        // Try complex regex for status, strength, and optional level
         const sMatch = raw.match(new RegExp(`"${s}"\\s*:\\s*\\{\\s*(?:"level"\\s*:\\s*"(.*?)",?\\s*)?"status"\\s*:\\s*"(.*?)",?\\s*"strength"\\s*:\\s*"(.*?)"`, "i"));
         if (sMatch) {
           if (sMatch[1]) {
@@ -96,12 +99,11 @@ const salvageIntel = (raw: string): Partial<DecodedOutput> => {
     }
   }
 
-  // TPO Read salvage
   const tpoRead: any = {};
   const sigMatch = raw.match(/"profile_signals"\s*:\s*"(.*?)"/i);
   if (sigMatch) tpoRead.profile_signals = sigMatch[1].trim();
   const migMatch = raw.match(/"dpoc_migration"\s*:\s*"(.*?)"/i);
-  if (migMatch) tpoRead.dpoc_migration = migMatch[1].trim();
+  if (sigMatch) tpoRead.dpoc_migration = migMatch[1].trim();
   const extMatch = raw.match(/"extreme_or_compression"\s*:\s*"(.*?)"/i);
   if (extMatch) tpoRead.extreme_or_compression = extMatch[1].trim();
   if (Object.keys(tpoRead).length > 0) salvaged.tpo_read = tpoRead;
@@ -137,14 +139,12 @@ const App: React.FC = () => {
       setAvailableFiles(files);
       setConnectionStatus('online');
       if (files.length > 0) {
-        if (!selectedFile || (autoScrollEnabled.current && selectedFile !== files[0])) {
-          handleFileSelect(files[0], true);
-        } else if (selectedFile) {
-          handleFileSelect(selectedFile, true);
+        if (!selectedFile) {
+          handleFileSelect(files[0], false);
         }
       } else {
         setSnapshots(rawSnapshots);
-        setError("No files found in repo. Showing mock data.");
+        setError("No session files found.");
       }
     } catch (err: any) {
       setError(err.message);
@@ -156,8 +156,8 @@ const App: React.FC = () => {
   };
 
   const handleFileSelect = async (fileName: string, isUpdate = false) => {
+    setSelectedFile(fileName);
     if (!isUpdate) {
-      setSelectedFile(fileName);
       setIsLoading(true);
       setAiAudit(null);
     }
@@ -175,8 +175,7 @@ const App: React.FC = () => {
         newSnapshots = Array.isArray(data) ? data : [data];
       }
       setSnapshots(newSnapshots);
-      setSelectedFile(fileName);
-      if (isUpdate || autoScrollEnabled.current) setSelectedIndex(newSnapshots.length - 1);
+      setSelectedIndex(newSnapshots.length - 1);
     } catch (err: any) {
       setError(`Stream Error: ${err.message}`);
     } finally {
@@ -190,7 +189,7 @@ const App: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
       const history = processedSnapshots.map(s => ({ t: s.input.current_et_time, b: s.decoded?.bias, d: s.decoded?.day_type?.type }));
-      const prompt = `Review market evolution: ${JSON.stringify(history)}. Summarize shifts around 11:00 AM. Return JSON: {"summary": string, "shifts": string[]}`;
+      const prompt = `Review market evolution: ${JSON.stringify(history)}. Summarize shifts. Return JSON: {"summary": string, "shifts": string[]}`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
@@ -267,23 +266,16 @@ const App: React.FC = () => {
 
   const currentSnapshot = processedSnapshots[selectedIndex] || null;
   const decodedOutput = currentSnapshot?.decoded || null;
-  const reasoning = decodedOutput?.day_type_reasoning || [];
+
+  const reasoningPoints = useMemo(() => {
+    const points = decodedOutput?.day_type_reasoning || [];
+    if (points.length === 0) return ["Synchronizing core intelligence stream..."];
+    // For seamless infinite loop, duplicate the array
+    return [...points, ...points];
+  }, [decodedOutput]);
 
   return (
     <div className="h-screen flex flex-col bg-slate-950 overflow-hidden text-slate-200 font-sans">
-      <style>{`
-        @keyframes ticker-scroll-horizontal {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-        .animate-ticker-header {
-          animation: ticker-scroll-horizontal 40s linear infinite;
-        }
-        .animate-ticker-header:hover {
-          animation-play-state: paused;
-        }
-      `}</style>
-
       <header className="shrink-0 z-[60] bg-slate-900/95 backdrop-blur-2xl border-b border-slate-800/60 px-6 py-4 flex items-center shadow-2xl relative">
         <div className="flex items-center gap-4 shrink-0 mr-6">
           <div className="p-2.5 bg-indigo-600 rounded-xl shadow-xl border border-indigo-400/20">
@@ -292,7 +284,7 @@ const App: React.FC = () => {
           <div>
             <h1 className="text-xl font-black tracking-tight text-white uppercase italic leading-none">ROCKIT <span className="text-indigo-400 not-italic">ENGINE</span></h1>
             <div className="flex items-center gap-3 mt-1.5">
-              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">v7.6</p>
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em]">v7.8</p>
               <div className="flex items-center gap-4">
                 <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[8px] font-black border transition-colors ${
                   connectionStatus === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
@@ -309,31 +301,26 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {reasoning.length > 0 && (
-          <div className="flex-1 h-14 bg-slate-950/40 border border-slate-800/60 rounded-2xl overflow-hidden group flex items-center relative mx-4 shadow-inner">
-            <div className="absolute left-0 top-0 bottom-0 z-20 bg-slate-900 border-r border-indigo-500/30 px-4 flex items-center gap-3">
-              <div className="relative">
-                <Activity className="w-5 h-5 text-indigo-400 animate-pulse" />
-                <Zap className="w-2 h-2 text-indigo-300 absolute -top-1 -right-1" />
-              </div>
-              <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] hidden xl:block">Strategic Intelligence</span>
-            </div>
-            <div className="flex-1 relative overflow-hidden h-full">
-              <div className="animate-ticker-header flex items-center h-full whitespace-nowrap gap-12 pl-[160px]">
-                {[...reasoning, ...reasoning, ...reasoning].map((reason, idx) => (
-                  <div key={idx} className="flex items-center gap-4 shrink-0">
-                    <span className="p-1 rounded bg-indigo-500/10"><ChevronRight className="w-3 h-3 text-indigo-400" /></span>
-                    <span className="text-sm font-black text-slate-100 uppercase tracking-wide">
-                      {reason}
-                    </span>
+        <div className="flex-1 h-14 bg-slate-950/40 border border-slate-800/60 rounded-2xl overflow-hidden group flex items-center relative mx-4 shadow-inner">
+          <div className="absolute left-0 top-0 bottom-0 z-20 bg-slate-900 border-r border-indigo-500/30 px-5 flex items-center gap-3">
+            <Cpu className="w-5 h-5 text-indigo-400 animate-pulse" />
+            <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] hidden xl:block">Core Intelligence</span>
+          </div>
+          <div className="flex-1 relative overflow-hidden h-full ml-[165px]">
+             <div className="absolute inset-x-0 top-0 animate-scroll-up-slow flex flex-col items-start justify-start py-4">
+                {reasoningPoints.map((point, i) => (
+                  <div key={i} className="h-6 flex items-center shrink-0 w-full px-8">
+                     <span className="text-[11px] font-black text-slate-200 uppercase tracking-[0.1em] whitespace-nowrap">
+                        <span className="text-indigo-500 mr-3">//</span> {point}
+                     </span>
                   </div>
                 ))}
-              </div>
-              <div className="absolute inset-y-0 left-[140px] w-24 bg-gradient-to-r from-slate-950/80 to-transparent pointer-events-none z-10" />
-              <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-slate-950/80 to-transparent pointer-events-none z-10" />
-            </div>
+             </div>
+             {/* Gradient Overlays for smooth fade out at edges */}
+             <div className="absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-slate-950/60 to-transparent z-10" />
+             <div className="absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-slate-950/60 to-transparent z-10" />
           </div>
-        )}
+        </div>
 
         {currentSnapshot && (
           <div className="flex items-center gap-6 shrink-0 ml-4 pl-6 border-l border-slate-800/60">
@@ -349,13 +336,10 @@ const App: React.FC = () => {
               <div className={`px-5 py-2 rounded-2xl flex flex-col items-center justify-center border transition-all shadow-xl ${
                 decodedOutput?.bias?.toUpperCase().includes('LONG') 
                   ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
-                  : decodedOutput?.bias?.toUpperCase().includes('SHORT')
-                  ? 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-                  : 'bg-slate-800/40 border-slate-700/50 text-slate-400'
+                  : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
               }`}>
                 <span className="text-[8px] font-black uppercase tracking-widest mb-1 opacity-60">System Bias</span>
                 <div className="flex items-center gap-2">
-                  {decodedOutput?.bias?.toUpperCase().includes('LONG') ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                   <span className="font-black text-sm tracking-[0.1em] uppercase italic">{decodedOutput?.bias || 'NEUTRAL'}</span>
                 </div>
               </div>
@@ -373,27 +357,53 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex overflow-hidden">
         <aside className="w-80 border-r border-slate-800/60 bg-slate-900/30 overflow-hidden flex flex-col shrink-0">
-          <div className="p-4 border-b border-slate-800/60">
-             <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Github className="w-3.5 h-3.5 text-slate-400" />
-                  <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Log Catalog</h2>
+          {/* Day / Session Selection */}
+          <div className="p-4 border-b border-slate-800/60 bg-slate-900/50">
+             <div className="flex items-center justify-between mb-3 px-1">
+                <div className="flex items-center gap-2 text-indigo-400">
+                  <Calendar className="w-4 h-4" />
+                  <h2 className="text-[10px] font-black uppercase tracking-[0.2em]">Select Session</h2>
                 </div>
                 {isLoading && <RefreshCw className="w-3 h-3 text-indigo-500 animate-spin" />}
               </div>
-              <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
-                {availableFiles.map(file => (
-                  <button key={file} onClick={() => handleFileSelect(file)}
-                    className={`w-full text-left px-3 py-1.5 rounded text-[10px] font-mono transition-all flex items-center justify-between ${
-                      selectedFile === file ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-500 hover:text-slate-300'
-                    }`}>
-                    <span className="truncate">{file}</span>
-                  </button>
-                ))}
+              <div className="space-y-1.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                {availableFiles.map(file => {
+                  const isActive = selectedFile === file;
+                  const displayName = file.replace(/\.jsonl?$/, '');
+                  return (
+                    <button 
+                      key={file} 
+                      onClick={() => handleFileSelect(file)}
+                      className={`w-full group text-left px-4 py-3 rounded-xl transition-all border flex items-center justify-center relative ${
+                        isActive 
+                          ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
+                          : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                         <FileJson className={`w-3.5 h-3.5 ${isActive ? 'text-indigo-400' : 'text-slate-600'}`} />
+                         <span className="text-[11px] font-mono font-black tracking-widest">{displayName}</span>
+                      </div>
+                      {isActive && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,1)]" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3 px-1 flex justify-between items-center opacity-40">
+                 <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">{availableFiles.length} Days Found</span>
+                 <div className="h-px flex-1 mx-3 bg-slate-800" />
+                 <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">v7.8</span>
               </div>
           </div>
 
+          {/* Time Slice Selection (within the active day) */}
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-900/10">
+            <div className="flex items-center gap-2 mb-4 px-2 opacity-60">
+               <Layers className="w-3.5 h-3.5 text-slate-400" />
+               <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Log History</h2>
+            </div>
             <div className="space-y-6">
               {slicesByHour.map(([hour, items]) => (
                 <div key={hour} className="space-y-1.5">
@@ -406,13 +416,15 @@ const App: React.FC = () => {
                     return (
                       <button key={idx} onClick={() => { setSelectedIndex(idx); autoScrollEnabled.current = (idx === processedSnapshots.length - 1); }}
                         className={`w-full text-left px-3 py-2.5 rounded-xl transition-all border group flex items-center justify-between gap-1 ${
-                          active ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg scale-[1.02]' : 'bg-slate-900/30 border-slate-800/60 hover:bg-slate-800/40'
+                          active ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg' : 'bg-slate-900/30 border-slate-800/60 hover:bg-slate-800/40'
                         }`}>
                         <span className={`text-[11px] font-black font-mono tracking-widest ${active ? 'text-white' : 'text-slate-400'}`}>
                           {s.input?.current_et_time || '--:--'}
                         </span>
                         <span className={`text-[8px] px-1.5 py-0.5 rounded font-black uppercase border ${
-                          active ? 'bg-white/20 border-white/30 text-white' : biasVal.includes('LONG') ? 'text-emerald-400 border-emerald-500/20' : biasVal.includes('SHORT') ? 'text-rose-400 border-rose-500/20' : 'text-slate-600 border-slate-800'
+                          active 
+                            ? 'bg-white/20 border-white/30 text-white' 
+                            : biasVal.includes('LONG') ? 'text-emerald-400 border-emerald-500/20' : 'text-rose-400 border-rose-500/20'
                         }`}>
                           {biasVal}
                         </span>
@@ -441,7 +453,7 @@ const App: React.FC = () => {
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
                    <div className="flex items-center gap-3">
                      <span className="p-1.5 bg-indigo-500/10 rounded-lg"><Sparkles className="w-5 h-5 text-indigo-400" /></span>
-                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em]">Temporal Strategic Audit</h4>
+                     <h4 className="text-[10px] font-black uppercase tracking-[0.2em]">Session Audit</h4>
                    </div>
                    <button onClick={() => setAiAudit(null)} className="text-slate-500 hover:text-white transition-all">✕</button>
                 </div>
