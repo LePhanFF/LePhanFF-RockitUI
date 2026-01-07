@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { MarketSnapshot, DecodedOutput, ProfileSet, DPOCSlice, FVG, DPOCStep } from '../types';
 import { 
@@ -37,7 +36,9 @@ import {
   ArrowRight,
   Wind,
   Share2,
-  ChevronRight
+  ChevronRight,
+  Dna,
+  Waves
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 
@@ -47,7 +48,7 @@ interface DashboardProps {
   allSnapshots?: MarketSnapshot[];
 }
 
-type TabType = 'brief' | 'logic' | 'globex' | 'profile' | 'migration' | 'gaps' | 'thinking';
+type TabType = 'brief' | 'pulse' | 'logic' | 'globex' | 'profile' | 'migration' | 'gaps' | 'thinking';
 
 const StatBox = ({ label, value, colorClass = "text-slate-100", compact = false }: { label: string; value: string | number; colorClass?: string; compact?: boolean }) => (
   <div className={`bg-slate-900/40 border border-slate-800/40 rounded-xl hover:border-indigo-500/30 transition-all ${compact ? 'p-2' : 'p-4'}`}>
@@ -146,28 +147,27 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     }).filter(d => d.time);
   }, [allSnapshots, snapshot, mig]);
 
-  const getReasoning = () => {
+  const reasoning = useMemo(() => {
     if (!output) return [];
-    const rawReasoning = output.day_type_reasoning || (output as any).evidence || (output as any).reasoning || (output as any).logic_points || (output as any).strategic_reasoning;
-    if (Array.isArray(rawReasoning)) return rawReasoning;
-    return [];
+    const rawReasoning = output.day_type_reasoning || (output as any).evidence || (output as any).reasoning;
+    return Array.isArray(rawReasoning) ? rawReasoning : [];
+  }, [output]);
+
+  const narrative = output?.one_liner || "Synchronizing Intelligence...";
+  const dayType = typeof output?.day_type === 'object' ? output.day_type.type : (output?.day_type || "N/A");
+
+  // Map session names to price levels for liquidity pulse
+  const getLevelForSession = (session: string) => {
+    switch (session.toLowerCase()) {
+      case 'asia': return `${premarket?.asia_high} / ${premarket?.asia_low}`;
+      case 'london': return `${premarket?.london_high} / ${premarket?.london_low}`;
+      case 'overnight': return `${premarket?.overnight_high} / ${premarket?.overnight_low}`;
+      case 'previous_day': return `${premarket?.previous_day_high} / ${premarket?.previous_day_low}`;
+      case 'previous_week': return `${premarket?.previous_week_high} / ${premarket?.previous_week_low}`;
+      case 'ib': return `${ib?.ib_high} / ${ib?.ib_low}`;
+      default: return 'N/A';
+    }
   };
-
-  const reasoning = getReasoning();
-
-  const getNarrative = () => {
-    if (!output) return "Synchronizing Intelligence...";
-    return output.one_liner || (output as any).narrative || "Context unavailable.";
-  };
-
-  const getDayType = () => {
-    if (!output) return "N/A";
-    const dt: any = output.day_type || (output as any).type;
-    return typeof dt === 'object' ? dt.type : dt || "N/A";
-  };
-
-  const narrative = getNarrative();
-  const dayType = getDayType();
 
   return (
     <div className="flex h-full gap-6 overflow-hidden">
@@ -231,6 +231,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
         <div className="flex border-b border-slate-800 p-1.5 gap-1 shrink-0 bg-slate-900/90 overflow-x-auto no-scrollbar">
           {[
             { id: 'brief', label: 'Brief', icon: Info },
+            { id: 'pulse', label: 'Pulse', icon: Waves },
             { id: 'logic', label: 'Logic', icon: Cpu },
             { id: 'migration', label: 'Migration', icon: Route },
             { id: 'globex', label: 'Globex', icon: Globe },
@@ -250,7 +251,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-950/40">
           {activeTab === 'brief' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              {/* Narrative Section */}
               <div className="relative overflow-hidden group">
                 <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition-colors rounded-2xl" />
                 <div className="relative p-7 border border-indigo-500/30 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.05)]">
@@ -262,7 +262,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 </div>
               </div>
 
-              {/* Bias & Confidence - Resized 1/3 smaller */}
               <div className="grid grid-cols-2 gap-4">
                 <div className={`p-4 rounded-2xl border transition-all ${output?.bias?.toUpperCase().includes('LONG') ? 'bg-emerald-500/5 border-emerald-500/40 text-emerald-400' : 'bg-rose-500/5 border-rose-500/40 text-rose-400'}`}>
                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] mb-2 block">System Bias</span>
@@ -274,7 +273,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 </div>
               </div>
 
-              {/* Technical Data - MOVED ABOVE Strategic Evidence & Made More Compact */}
               <div className="bg-slate-900/20 border border-slate-800/40 rounded-2xl p-4">
                  <div className="flex items-center gap-2 mb-4">
                     <Wind className="w-3.5 h-3.5 text-indigo-400" />
@@ -297,7 +295,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                  </div>
               </div>
 
-              {/* Strategic Evidence Section */}
               <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-7">
                  <div className="flex items-center gap-3 mb-6">
                     <div className="w-8 h-8 rounded-xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20"><CheckCircle2 className="w-4 h-4 text-indigo-400" /></div>
@@ -312,6 +309,106 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                     )) : <div className="text-center py-10 opacity-30 text-[10px] font-black uppercase tracking-[0.5em]">Awaiting Analysis...</div>}
                  </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'pulse' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+              {/* Liquidity Sweep Matrix Section */}
+              <div className="bg-slate-900/40 border border-indigo-500/30 rounded-2xl p-6 shadow-2xl">
+                 <div className="flex items-center gap-3 mb-6">
+                    <Waves className="w-5 h-5 text-indigo-400" />
+                    <h4 className="text-[11px] font-black uppercase tracking-[0.4em] text-slate-100">Liquidity Pulse Matrix</h4>
+                 </div>
+                 
+                 <div className="space-y-3">
+                   {output?.liquidity_sweeps ? Object.entries(output.liquidity_sweeps).map(([session, data]: [string, any]) => (
+                     <div key={session} className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-4 flex items-center justify-between hover:border-indigo-500/40 transition-all group">
+                       <div className="flex flex-col">
+                         <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">{session.replace('_', ' ')}</span>
+                         <span className="text-xs font-mono font-black text-slate-300 group-hover:text-indigo-300 transition-colors">
+                            {data.level || getLevelForSession(session)}
+                         </span>
+                       </div>
+                       <div className="flex items-center gap-6 text-right">
+                         <div className="flex flex-col items-end">
+                            <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Status</span>
+                            <span className={`text-[10px] font-black uppercase tracking-widest ${
+                              data.status.includes('Swept') ? 'text-rose-400' :
+                              data.status.includes('Reclaimed') ? 'text-emerald-400' :
+                              data.status.includes('Held') ? 'text-amber-400' :
+                              'text-slate-500'
+                            }`}>
+                              {data.status}
+                            </span>
+                         </div>
+                         <div className="flex flex-col items-end">
+                            <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Strength</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                              data.strength.includes('Engulfed') ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' :
+                              data.strength.includes('Failed') ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                              'bg-slate-800 text-slate-500 border-slate-700'
+                            }`}>
+                              {data.strength}
+                            </span>
+                         </div>
+                       </div>
+                     </div>
+                   )) : (
+                     <div className="py-12 text-center opacity-20 text-[10px] font-black uppercase tracking-[0.5em]">Syncing Matrix...</div>
+                   )}
+                 </div>
+              </div>
+
+              {/* Structural Analysis Banner */}
+              {output?.value_acceptance && (
+                <div className="bg-indigo-600/10 border border-indigo-500/40 rounded-2xl p-7 shadow-xl relative overflow-hidden group">
+                   <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-700">
+                     <Target className="w-48 h-48 text-indigo-400" />
+                   </div>
+                   <div className="flex items-center gap-2 mb-4 relative z-10">
+                     <ShieldCheck className="w-4 h-4 text-indigo-400" />
+                     <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.4em]">Structural Order Flow Read</span>
+                   </div>
+                   <p className="text-xl font-black text-slate-100 leading-relaxed italic relative z-10 tracking-tight">"{output.value_acceptance}"</p>
+                </div>
+              )}
+
+              {/* TPO Detailed Context Cards */}
+              {output?.tpo_read && (
+                <div className="grid grid-cols-1 gap-4">
+                   <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 flex flex-col gap-4">
+                      <div className="flex items-center gap-3">
+                         <Fingerprint className="w-4 h-4 text-indigo-400" />
+                         <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">TPO Profile Signals</h4>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(output.tpo_read.profile_signals || "Balanced").split('|').map((sig, i) => (
+                          <span key={i} className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-[10px] font-black text-indigo-300 uppercase tracking-widest">
+                            {sig.trim()}
+                          </span>
+                        ))}
+                      </div>
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+                         <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-2">Migration Velocity</span>
+                         <div className="text-sm font-mono font-black text-slate-100 uppercase">{output.tpo_read.dpoc_migration || 'Static Anchor'}</div>
+                      </div>
+                      <div className={`bg-slate-900/60 border rounded-2xl p-5 ${output.tpo_read.extreme_or_compression?.includes('extreme') ? 'border-indigo-500/40' : 'border-slate-800'}`}>
+                         <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-2">Regime Check</span>
+                         <div className={`text-sm font-black uppercase italic ${
+                           output.tpo_read.extreme_or_compression?.includes('bullish') ? 'text-emerald-400' :
+                           output.tpo_read.extreme_or_compression?.includes('bearish') ? 'text-rose-400' :
+                           'text-slate-400'
+                         }`}>
+                           {output.tpo_read.extreme_or_compression || 'Neutral'}
+                         </div>
+                      </div>
+                   </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -562,6 +659,29 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
           {activeTab === 'globex' && (
             <div className="space-y-5 animate-in fade-in">
+               <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
+                 <div className="flex items-center gap-3 mb-6">
+                    <Dna className="w-5 h-5 text-indigo-400" />
+                    <h4 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-300">Market DNA & Premarket Context</h4>
+                 </div>
+                 <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/60 text-center">
+                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Compression Flag</span>
+                       <span className={`text-xs font-black uppercase tracking-widest px-3 py-1 rounded-full ${premarket?.compression_flag ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}>
+                          {premarket?.compression_flag ? 'ACTIVE' : 'INACTIVE'}
+                       </span>
+                    </div>
+                    <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/60 text-center">
+                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Compression Ratio</span>
+                       <span className="text-lg font-mono font-black text-indigo-400">{premarket?.compression_ratio?.toFixed(3) || '0.000'}</span>
+                    </div>
+                    <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800/60 text-center">
+                       <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block">SMT Pre-Open</span>
+                       <span className="text-xs font-black uppercase tracking-tighter text-slate-200">{premarket?.smt_preopen || 'NEUTRAL'}</span>
+                    </div>
+                 </div>
+               </div>
+
                <div className="grid grid-cols-2 gap-4">
                  <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 mb-6 flex items-center gap-2"><Globe className="w-4 h-4" /> Overnight Profile</h4>

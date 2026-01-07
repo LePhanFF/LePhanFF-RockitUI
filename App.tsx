@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
@@ -70,6 +69,42 @@ const salvageIntel = (raw: string): Partial<DecodedOutput> => {
 
   const confMatch = raw.match(/"confidence"\s*:\s*"(.*?)"/i);
   if (confMatch) salvaged.confidence = confMatch[1].trim();
+
+  const vaMatch = raw.match(/"value_acceptance"\s*:\s*"(.*?)"/i);
+  if (vaMatch) salvaged.value_acceptance = vaMatch[1].trim();
+
+  // Liquidity Sweep salvaging with support for 'level'
+  const sweepsMatch = raw.match(/"liquidity_sweeps"\s*:\s*(\{[\s\S]*?\})/i);
+  if (sweepsMatch) {
+    try {
+      salvaged.liquidity_sweeps = JSON.parse(hardenedClean(sweepsMatch[1]));
+    } catch (e) {
+      const sessions = ["asia", "london", "overnight", "previous_day", "previous_week", "ib"];
+      const sweeps: any = {};
+      sessions.forEach(s => {
+        // Try complex regex for status, strength, and optional level
+        const sMatch = raw.match(new RegExp(`"${s}"\\s*:\\s*\\{\\s*(?:"level"\\s*:\\s*"(.*?)",?\\s*)?"status"\\s*:\\s*"(.*?)",?\\s*"strength"\\s*:\\s*"(.*?)"`, "i"));
+        if (sMatch) {
+          if (sMatch[1]) {
+            sweeps[s] = { level: sMatch[1], status: sMatch[2], strength: sMatch[3] };
+          } else {
+            sweeps[s] = { status: sMatch[2], strength: sMatch[3] };
+          }
+        }
+      });
+      if (Object.keys(sweeps).length > 0) salvaged.liquidity_sweeps = sweeps;
+    }
+  }
+
+  // TPO Read salvage
+  const tpoRead: any = {};
+  const sigMatch = raw.match(/"profile_signals"\s*:\s*"(.*?)"/i);
+  if (sigMatch) tpoRead.profile_signals = sigMatch[1].trim();
+  const migMatch = raw.match(/"dpoc_migration"\s*:\s*"(.*?)"/i);
+  if (migMatch) tpoRead.dpoc_migration = migMatch[1].trim();
+  const extMatch = raw.match(/"extreme_or_compression"\s*:\s*"(.*?)"/i);
+  if (extMatch) tpoRead.extreme_or_compression = extMatch[1].trim();
+  if (Object.keys(tpoRead).length > 0) salvaged.tpo_read = tpoRead;
 
   return salvaged;
 };
@@ -196,7 +231,7 @@ const App: React.FC = () => {
           decoded = JSON.parse(cleanedText);
         } catch (parseError) {
           const salvaged = salvageIntel(rawText);
-          if (salvaged.day_type_reasoning || salvaged.one_liner || salvaged.day_type) {
+          if (salvaged.day_type_reasoning || salvaged.one_liner || salvaged.day_type || salvaged.liquidity_sweeps) {
             decoded = salvaged as DecodedOutput;
           }
         }
@@ -250,7 +285,6 @@ const App: React.FC = () => {
       `}</style>
 
       <header className="shrink-0 z-[60] bg-slate-900/95 backdrop-blur-2xl border-b border-slate-800/60 px-6 py-4 flex items-center shadow-2xl relative">
-        {/* Left Branding Cluster */}
         <div className="flex items-center gap-4 shrink-0 mr-6">
           <div className="p-2.5 bg-indigo-600 rounded-xl shadow-xl border border-indigo-400/20">
             <LayoutDashboard className="w-6 h-6 text-white" />
@@ -275,7 +309,6 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Center-Right Large Evidence Ticker Area */}
         {reasoning.length > 0 && (
           <div className="flex-1 h-14 bg-slate-950/40 border border-slate-800/60 rounded-2xl overflow-hidden group flex items-center relative mx-4 shadow-inner">
             <div className="absolute left-0 top-0 bottom-0 z-20 bg-slate-900 border-r border-indigo-500/30 px-4 flex items-center gap-3">
@@ -287,7 +320,6 @@ const App: React.FC = () => {
             </div>
             <div className="flex-1 relative overflow-hidden h-full">
               <div className="animate-ticker-header flex items-center h-full whitespace-nowrap gap-12 pl-[160px]">
-                {/* Looping Content */}
                 {[...reasoning, ...reasoning, ...reasoning].map((reason, idx) => (
                   <div key={idx} className="flex items-center gap-4 shrink-0">
                     <span className="p-1 rounded bg-indigo-500/10"><ChevronRight className="w-3 h-3 text-indigo-400" /></span>
@@ -297,14 +329,12 @@ const App: React.FC = () => {
                   </div>
                 ))}
               </div>
-              {/* Fade masks */}
               <div className="absolute inset-y-0 left-[140px] w-24 bg-gradient-to-r from-slate-950/80 to-transparent pointer-events-none z-10" />
               <div className="absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-slate-950/80 to-transparent pointer-events-none z-10" />
             </div>
           </div>
         )}
 
-        {/* Far Right Market Snapshot Cluster */}
         {currentSnapshot && (
           <div className="flex items-center gap-6 shrink-0 ml-4 pl-6 border-l border-slate-800/60">
             <div className="flex flex-col items-end">

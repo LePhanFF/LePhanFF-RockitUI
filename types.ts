@@ -187,7 +187,7 @@ export interface DecodedOutput {
     timestamp: string;
   };
   bias: string;
-  liquidity_sweeps: Record<string, { status: string; strength: string }>;
+  liquidity_sweeps: Record<string, { status: string; strength: string; level?: string }>;
   value_acceptance: string;
   tpo_read: {
     profile_signals: string;
