@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { MarketSnapshot, DecodedOutput, ProfileSet, DPOCSlice, FVG, DPOCStep } from '../types';
 import { 
@@ -38,9 +39,12 @@ import {
   Share2,
   ChevronRight,
   Dna,
-  Waves
+  Waves,
+  Type as TypeIcon,
+  Timer
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
+import ProfileLadder from './ProfileLadder';
 
 interface DashboardProps {
   snapshot: MarketSnapshot & { thinking?: string };
@@ -89,6 +93,9 @@ const LogicBadge = ({ label, value, condition }: { label: string; value: string 
 
 const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [] }) => {
   const [activeTab, setActiveTab] = useState<TabType>('brief');
+  const [showTPOPrints, setShowTPOPrints] = useState(true);
+  const [showVolumeBars, setShowVolumeBars] = useState(true);
+  const [tpoResolution, setTpoResolution] = useState<'5m' | '30m'>('30m');
   
   const [showOHLC, setShowOHLC] = useState(false);
   const [showVWAP, setShowVWAP] = useState(false);
@@ -156,7 +163,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
   const narrative = output?.one_liner || "Synchronizing Intelligence...";
   const dayType = typeof output?.day_type === 'object' ? output.day_type.type : (output?.day_type || "N/A");
 
-  // Map session names to price levels for liquidity pulse
   const getLevelForSession = (session: string) => {
     switch (session.toLowerCase()) {
       case 'asia': return `${premarket?.asia_high} / ${premarket?.asia_low}`;
@@ -314,7 +320,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
           {activeTab === 'pulse' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-              {/* Liquidity Sweep Matrix Section */}
               <div className="bg-slate-900/40 border border-indigo-500/30 rounded-2xl p-6 shadow-2xl">
                  <div className="flex items-center gap-3 mb-6">
                     <Waves className="w-5 h-5 text-indigo-400" />
@@ -360,7 +365,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                  </div>
               </div>
 
-              {/* Structural Analysis Banner */}
               {output?.value_acceptance && (
                 <div className="bg-indigo-600/10 border border-indigo-500/40 rounded-2xl p-7 shadow-xl relative overflow-hidden group">
                    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-700">
@@ -374,7 +378,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 </div>
               )}
 
-              {/* TPO Detailed Context Cards */}
               {output?.tpo_read && (
                 <div className="grid grid-cols-1 gap-4">
                    <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 flex flex-col gap-4">
@@ -409,6 +412,64 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                    </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'profile' && (
+            <div className="h-full flex flex-col gap-4 animate-in fade-in">
+              <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                 <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20"><BarChartHorizontal className="w-5 h-5 text-indigo-400" /></div>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-200">Market Profile Intelligence</h3>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">TPO & Volume Distribution</p>
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800/60">
+                    <div className="flex items-center gap-1 bg-slate-900 rounded-lg p-0.5 border border-slate-800/40 mr-2">
+                      <button 
+                        onClick={() => setTpoResolution('30m')}
+                        className={`px-3 py-1 rounded text-[9px] font-black transition-all ${tpoResolution === '30m' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        30M
+                      </button>
+                      <button 
+                        onClick={() => setTpoResolution('5m')}
+                        className={`px-3 py-1 rounded text-[9px] font-black transition-all ${tpoResolution === '5m' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        5M
+                      </button>
+                    </div>
+                   <button 
+                     onClick={() => setShowTPOPrints(!showTPOPrints)} 
+                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${showTPOPrints ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                   >
+                     <TypeIcon className="w-3.5 h-3.5" />
+                     <span className="text-[9px] font-black uppercase">TPO</span>
+                   </button>
+                   <button 
+                     onClick={() => setShowVolumeBars(!showVolumeBars)} 
+                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${showVolumeBars ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                   >
+                     <Layers className="w-3.5 h-3.5" />
+                     <span className="text-[9px] font-black uppercase">VOL</span>
+                   </button>
+                 </div>
+              </div>
+              
+              <div className="flex-1 min-h-0">
+                <ProfileLadder 
+                  allSnapshots={allSnapshots} 
+                  currentSnapshot={snapshot} 
+                  showTPO={showTPOPrints} 
+                  showVolume={showVolumeBars}
+                  resolution={tpoResolution}
+                  profileData={{
+                    tpo: { poc: tpo?.current_poc || 0, vah: tpo?.current_vah || 0, val: tpo?.current_val || 0 },
+                    volume: vol?.current_session || {} as ProfileSet
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -572,91 +633,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
              </div>
           )}
 
-          {activeTab === 'profile' && (
-            <div className="space-y-6 animate-in fade-in">
-              <div className="bg-slate-900/40 border border-indigo-500/30 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5"><LayoutGrid className="w-24 h-24" /></div>
-                <div className="flex items-center gap-3 mb-6 relative">
-                  <BarChartHorizontal className="w-5 h-5 text-indigo-400" />
-                  <h3 className="text-xs font-black uppercase tracking-[0.3em] text-slate-200">Authoritative TPO Fact Sheet</h3>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-800/80 hover:border-indigo-500/40 transition-all text-center">
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 block">Current VAH</span>
-                    <div className="text-xl font-mono font-black text-slate-100 tracking-tighter">{tpo?.current_vah?.toFixed(2) || '0.00'}</div>
-                  </div>
-                  <div className="bg-indigo-500/10 p-5 rounded-2xl border border-indigo-500/40 shadow-lg text-center">
-                    <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] mb-2 block">Current POC</span>
-                    <div className="text-2xl font-mono font-black text-indigo-300 tracking-tighter">{tpo?.current_poc?.toFixed(2) || '0.00'}</div>
-                  </div>
-                  <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-800/80 hover:border-indigo-500/40 transition-all text-center">
-                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 block">Current VAL</span>
-                    <div className="text-xl font-mono font-black text-slate-100 tracking-tighter">{tpo?.current_val?.toFixed(2) || '0.00'}</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Box className="w-4 h-4 text-indigo-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Structure Data</span>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center py-2 border-b border-slate-800/40">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase">TPO Shape</span>
-                        <span className="text-[10px] font-black text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full uppercase tracking-widest">{tpo?.tpo_shape || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-slate-800/40">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase">Fattening Zone</span>
-                        <span className="text-[10px] font-black text-slate-100 uppercase tracking-widest">{tpo?.fattening_zone?.replace('_', ' ') || 'N/A'}</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 border-b border-slate-800/40">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase">Poor High Status</span>
-                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${tpo?.poor_high ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : 'text-slate-600'}`}>
-                          {tpo?.poor_high ? 'DETECTED' : 'STABLE'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-2">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase">Poor Low Status</span>
-                        <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest ${tpo?.poor_low ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : 'text-slate-600'}`}>
-                          {tpo?.poor_low ? 'DETECTED' : 'STABLE'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-950/40 border border-slate-800/60 rounded-xl p-5 space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Zap className="w-4 h-4 text-amber-400" />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Rejection Signals</span>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div className="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-xl flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest">Single Prints Above VAH</span>
-                        </div>
-                        <span className="text-2xl font-black text-emerald-400">+{tpo?.single_prints_above_vah || 0}</span>
-                      </div>
-                      <div className="p-4 bg-rose-500/5 border border-rose-500/20 rounded-xl flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-rose-600 uppercase tracking-widest">Single Prints Below VAL</span>
-                        </div>
-                        <span className="text-2xl font-black text-rose-400">+{tpo?.single_prints_below_val || 0}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {tpo?.note && (
-                  <div className="mt-6 p-5 bg-slate-950 border border-indigo-500/20 rounded-2xl">
-                    <p className="text-sm font-bold text-slate-300 italic leading-relaxed">"{tpo.note}"</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {activeTab === 'globex' && (
             <div className="space-y-5 animate-in fade-in">
                <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6">
@@ -734,7 +710,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                       <h5 className="text-[9px] font-black uppercase text-slate-500 tracking-widest pl-2">{tf.replace('_', ' ')}</h5>
                       <div className="grid grid-cols-1 gap-2">
                         {(fvgs as any)[tf]?.length > 0 ? (fvgs as any)[tf].map((fvg: FVG, idx: number) => (
-                          <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between ${fvg.type === 'bullish' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'}`}>
+                          <div key={idx} className={`p-4 rounded-xl border flex items-center justify-between ${fvg.type === 'bullish' ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/40 text-rose-400'}`}>
                             <div className="flex items-center gap-4">
                               <span className={`text-[10px] font-black uppercase px-2 py-1 rounded ${fvg.type === 'bullish' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>{fvg.type}</span>
                               <span className="text-[9px] font-mono text-slate-500">{fvg.time}</span>
