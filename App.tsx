@@ -2,14 +2,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
+import { rawSnapshots } from './mockData';
 import { GoogleGenAI } from "@google/genai";
 import { 
   Clock, 
-  TrendingUp, 
-  TrendingDown, 
   LayoutDashboard, 
   Database, 
-  Github, 
   RefreshCw, 
   Timer,
   BrainCircuit,
@@ -17,12 +15,14 @@ import {
   Wifi, 
   WifiOff,
   Activity,
-  ChevronRight,
   Zap,
   Calendar,
   Layers,
   FileJson,
-  Cpu
+  Cpu,
+  AlertCircle,
+  ShieldAlert,
+  PlayCircle
 } from 'lucide-react';
 
 const GITHUB_REPO = "LePhanFF/RockitDataFeed";
@@ -111,50 +111,113 @@ const salvageIntel = (raw: string): Partial<DecodedOutput> => {
 };
 
 const App: React.FC = () => {
+  // Persistence initialization
+  const savedFiles = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('rockit_available_files') || '[]');
+    } catch { return []; }
+  }, []);
+
   const [snapshots, setSnapshots] = useState<any[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [availableFiles, setAvailableFiles] = useState<string[]>([]);
-  const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedIndex, setSelectedIndex] = useState(() => {
+    return parseInt(localStorage.getItem('rockit_selected_index') || '0');
+  });
+  const [availableFiles, setAvailableFiles] = useState<string[]>(savedFiles);
+  const [selectedFile, setSelectedFile] = useState<string | null>(() => {
+    return localStorage.getItem('rockit_selected_file');
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isAuditing, setIsAuditing] = useState(false);
   const [aiAudit, setAiAudit] = useState<{ summary: string; shifts: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isRateLimited, setIsRateLimited] = useState(false);
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SEC);
   const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'loading'>('loading');
+  const [isDemoMode, setIsDemoMode] = useState(false);
   
   const slicesEndRef = useRef<HTMLDivElement>(null);
   const autoScrollEnabled = useRef(true);
 
+  // Persistence side effects
+  useEffect(() => {
+    if (availableFiles.length > 0 && !isDemoMode) {
+      localStorage.setItem('rockit_available_files', JSON.stringify(availableFiles));
+    }
+  }, [availableFiles, isDemoMode]);
+
+  useEffect(() => {
+    if (selectedFile && !isDemoMode) localStorage.setItem('rockit_selected_file', selectedFile);
+  }, [selectedFile, isDemoMode]);
+
+  useEffect(() => {
+    if (!isDemoMode) localStorage.setItem('rockit_selected_index', selectedIndex.toString());
+  }, [selectedIndex, isDemoMode]);
+
   const fetchFileList = async (isAutoRefresh = false) => {
     if (!isAutoRefresh) setIsLoading(true);
     try {
-      const res = await fetch(`${BASE_URL}/${GITHUB_REPO}/contents/${LOCAL_PATH}`);
+      const res = await fetch(`${BASE_URL}/${GITHUB_REPO}/contents/${LOCAL_PATH}?t=${Date.now()}`);
+      
+      if (res.status === 403 || res.status === 429) {
+        setIsRateLimited(true);
+        throw new Error("GitHub Rate Limit Active");
+      }
+
       if (!res.ok) throw new Error(`Source connection failed: ${res.statusText}`);
+      
       const data = await res.json();
       const files = data
         .filter((f: any) => f.name.endsWith('.json') || f.name.endsWith('.jsonl'))
         .map((f: any) => f.name)
         .sort((a: string, b: string) => b.localeCompare(a));
+      
       setAvailableFiles(files);
       setConnectionStatus('online');
-      if (files.length > 0) {
-        if (!selectedFile) {
+      setIsRateLimited(false);
+      setError(null);
+
+      if (files.length > 0 && !isDemoMode) {
+        if (!selectedFile || !files.includes(selectedFile)) {
           handleFileSelect(files[0], false);
+        } else {
+          handleFileSelect(selectedFile, true);
         }
-      } else {
-        setSnapshots(rawSnapshots);
-        setError("No session files found.");
       }
     } catch (err: any) {
+      console.warn("Fetch Error:", err.message);
       setError(err.message);
       setConnectionStatus('offline');
-      if (snapshots.length === 0) setSnapshots(rawSnapshots);
+      
+      if (err.message.includes("Rate Limit")) {
+        setIsRateLimited(true);
+      }
+      
+      if (selectedFile && !isDemoMode) {
+        handleFileSelect(selectedFile, true);
+      } else if (snapshots.length === 0 && !isDemoMode && availableFiles.length === 0) {
+        // Only load mock as fallback if absolutely no cache exists
+        loadDemoMode();
+      }
     } finally {
       if (!isAutoRefresh) setIsLoading(false);
     }
   };
 
+  const loadDemoMode = () => {
+    setIsDemoMode(true);
+    setSelectedFile("DEMO_2025_MOCK.json");
+    setAvailableFiles(["DEMO_2025_MOCK.json"]);
+    setSnapshots(rawSnapshots);
+    setSelectedIndex(rawSnapshots.length - 1);
+  };
+
   const handleFileSelect = async (fileName: string, isUpdate = false) => {
+    if (fileName === "DEMO_2025_MOCK.json") {
+       loadDemoMode();
+       return;
+    }
+    
+    setIsDemoMode(false);
     setSelectedFile(fileName);
     if (!isUpdate) {
       setIsLoading(true);
@@ -174,9 +237,15 @@ const App: React.FC = () => {
         newSnapshots = Array.isArray(data) ? data : [data];
       }
       setSnapshots(newSnapshots);
-      setSelectedIndex(newSnapshots.length - 1);
+      
+      if (!isUpdate) {
+        setSelectedIndex(newSnapshots.length - 1);
+      } else if (selectedIndex >= newSnapshots.length) {
+        setSelectedIndex(newSnapshots.length - 1);
+      }
     } catch (err: any) {
-      setError(`Stream Error: ${err.message}`);
+      console.error("Stream Error:", err.message);
+      if (!isUpdate) setError(`Stream Error: ${err.message}`);
     } finally {
       if (!isUpdate) setIsLoading(false);
     }
@@ -269,7 +338,6 @@ const App: React.FC = () => {
   const reasoningPoints = useMemo(() => {
     const points = decodedOutput?.day_type_reasoning || [];
     if (points.length === 0) return ["Synchronizing core intelligence stream..."];
-    // For seamless infinite loop, duplicate the array
     return [...points, ...points];
   }, [decodedOutput]);
 
@@ -293,7 +361,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded text-[10px] font-black text-indigo-400">
                   <Timer className="w-3 h-3" />
-                  RE-POLL: {countdown}s
+                  {isRateLimited ? "WAITING..." : `RE-POLL: ${countdown}s`}
                 </div>
               </div>
             </div>
@@ -315,7 +383,6 @@ const App: React.FC = () => {
                   </div>
                 ))}
              </div>
-             {/* Gradient Overlays for smooth fade out at edges */}
              <div className="absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-slate-950/60 to-transparent z-10" />
              <div className="absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-slate-950/60 to-transparent z-10" />
           </div>
@@ -356,48 +423,89 @@ const App: React.FC = () => {
 
       <main className="flex-1 flex overflow-hidden">
         <aside className="w-80 border-r border-slate-800/60 bg-slate-900/30 overflow-hidden flex flex-col shrink-0">
-          {/* Day / Session Selection */}
           <div className="p-5 border-b border-slate-800/60 bg-slate-900/50">
              <div className="flex items-center justify-between mb-4 px-1">
                 <div className="flex items-center gap-3 text-indigo-400">
                   <Calendar className="w-5 h-5" />
                   <h2 className="text-xs font-black uppercase tracking-[0.2em]">Select Session</h2>
                 </div>
-                {isLoading && <RefreshCw className="w-4 h-4 text-indigo-500 animate-spin" />}
+                <button 
+                  onClick={() => fetchFileList(false)} 
+                  disabled={isLoading}
+                  className="p-1 hover:bg-slate-800 rounded transition-colors disabled:opacity-30"
+                >
+                  <RefreshCw className={`w-4 h-4 text-indigo-500 ${isLoading ? 'animate-spin' : ''}`} />
+                </button>
               </div>
+
+              {isRateLimited && (
+                <div className="mb-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-500" />
+                    <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Rate Limit Reached</span>
+                  </div>
+                  <p className="text-[9px] font-bold text-amber-200/60 leading-relaxed italic">
+                    GitHub's hourly API limit reached. App is using Offline Cache Mode. New sessions will appear once the limit resets.
+                  </p>
+                </div>
+              )}
+
+              {error && !isRateLimited && (
+                <div className="mb-3 px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span className="text-[9px] font-bold text-rose-200/80 leading-tight">{error}</span>
+                </div>
+              )}
+
               <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-                {availableFiles.map(file => {
-                  const isActive = selectedFile === file;
-                  const displayName = file.replace(/\.jsonl?$/, '');
-                  return (
+                {availableFiles.length > 0 ? (
+                  availableFiles.map(file => {
+                    const isActive = selectedFile === file;
+                    const displayName = file.replace(/\.jsonl?$/, '');
+                    const isDemo = file === "DEMO_2025_MOCK.json";
+                    return (
+                      <button 
+                        key={file} 
+                        onClick={() => handleFileSelect(file)}
+                        className={`w-full group text-left px-5 py-4 rounded-xl transition-all border flex items-center justify-center relative ${
+                          isActive 
+                            ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
+                            : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                           {isDemo ? <Sparkles className="w-4 h-4 text-amber-400" /> : <FileJson className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-600'}`} />}
+                           <span className="text-xs font-mono font-black tracking-widest">{displayName}</span>
+                        </div>
+                        {isActive && (
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,1)]" />
+                        )}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="py-8 px-4 text-center bg-slate-950/30 border border-dashed border-slate-800 rounded-xl space-y-4">
+                    <Database className="w-6 h-6 text-slate-700 mx-auto" />
+                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-relaxed">
+                      Session stream is throttled by GitHub API.
+                    </p>
                     <button 
-                      key={file} 
-                      onClick={() => handleFileSelect(file)}
-                      className={`w-full group text-left px-5 py-4 rounded-xl transition-all border flex items-center justify-center relative ${
-                        isActive 
-                          ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
-                          : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300'
-                      }`}
+                      onClick={loadDemoMode}
+                      className="w-full py-2.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
                     >
-                      <div className="flex items-center gap-4">
-                         <FileJson className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-600'}`} />
-                         <span className="text-xs font-mono font-black tracking-widest">{displayName}</span>
-                      </div>
-                      {isActive && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,1)]" />
-                      )}
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      Launch Demo Session
                     </button>
-                  );
-                })}
+                  </div>
+                )}
               </div>
               <div className="mt-4 px-1 flex justify-between items-center opacity-40">
-                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{availableFiles.length} Days Found</span>
+                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{availableFiles.length} Days Sync'd</span>
                  <div className="h-px flex-1 mx-4 bg-slate-800" />
                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">v7.8</span>
               </div>
           </div>
 
-          {/* Time Slice Selection (within the active day) */}
           <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-slate-900/10">
             <div className="flex items-center gap-3 mb-5 px-2 opacity-60">
                <Layers className="w-4 h-4 text-slate-400" />
@@ -472,7 +580,18 @@ const App: React.FC = () => {
           ) : (
             <div className="h-full flex flex-col items-center justify-center opacity-30 select-none">
               <Database className="w-20 h-20 mb-8 text-indigo-500 animate-pulse" />
-              <h3 className="italic font-black uppercase tracking-[0.5em] text-3xl">Terminal Standby</h3>
+              <h3 className="italic font-black uppercase tracking-[0.5em] text-3xl text-center">
+                {isLoading ? 'Synchronizing Stream...' : 'Terminal Standby'}
+              </h3>
+              {error && <p className="mt-4 text-rose-500 font-mono text-xs uppercase tracking-widest">{error}</p>}
+              {isRateLimited && availableFiles.length === 0 && (
+                <button 
+                  onClick={loadDemoMode}
+                  className="mt-8 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-2xl"
+                >
+                  Start Demo Mode
+                </button>
+              )}
             </div>
           )}
         </section>

@@ -124,16 +124,18 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
   const [showIB, setShowIB] = useState(true);
   const [showMigrationTrace, setShowMigrationTrace] = useState(true);
   
-  const input = snapshot?.input || {};
-  const intraday = input?.intraday || {};
-  const core = input?.core_confluences || {};
-  const premarket = input?.premarket || {};
-  const ib = intraday?.ib || {};
-  const vol = intraday?.volume_profile || {};
-  const tpo = intraday?.tpo_profile || {};
-  const fvgs = intraday?.fvg_detection || {};
-  const migData = intraday?.dpoc_migration || { note: '' };
-  const wicks = intraday?.wick_parade || { bullish_wick_parade_count: 0, bearish_wick_parade_count: 0 };
+  // Fix: Cast fallback empty object to satisfy TypeScript property access for MarketSnapshot input fields.
+  const input = (snapshot?.input || {}) as MarketSnapshot['input'];
+  const intraday = (input.intraday || {}) as MarketSnapshot['input']['intraday'];
+  const core = (input.core_confluences || {}) as MarketSnapshot['input']['core_confluences'];
+  const premarket = (input.premarket || {}) as MarketSnapshot['input']['premarket'];
+  // Fix: Added explicit casting for ib, vol, tpo, fvgs, migData, and wicks to fix Property access errors.
+  const ib = (intraday?.ib || {}) as MarketSnapshot['input']['intraday']['ib'];
+  const vol = (intraday?.volume_profile || {}) as MarketSnapshot['input']['intraday']['volume_profile'];
+  const tpo = (intraday?.tpo_profile || {}) as MarketSnapshot['input']['intraday']['tpo_profile'];
+  const fvgs = (intraday?.fvg_detection || {}) as MarketSnapshot['input']['intraday']['fvg_detection'];
+  const migData = (intraday?.dpoc_migration || { note: '' }) as MarketSnapshot['input']['intraday']['dpoc_migration'];
+  const wicks = (intraday?.wick_parade || { bullish_wick_parade_count: 0, bearish_wick_parade_count: 0 }) as MarketSnapshot['input']['intraday']['wick_parade'];
 
   const chartData = useMemo(() => {
     if (allSnapshots.length === 0) return [];
@@ -143,9 +145,11 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     const traceHistory = migData.dpoc_history || [];
 
     return visibleSnapshots.map(s => {
-      const inp = s.input || {};
-      const intra = inp.intraday || {};
-      const ibData = intra.ib || {};
+      // Fix: Cast s.input fallback to MarketSnapshot['input'] to fix property access errors on potentially empty object.
+      const inp = (s.input || {}) as MarketSnapshot['input'];
+      const intra = (inp.intraday || {}) as MarketSnapshot['input']['intraday'];
+      // Fix: Explicitly cast ibData to fix property access errors inside chartData map.
+      const ibData = (intra.ib || {}) as MarketSnapshot['input']['intraday']['ib'];
       
       const matchedSlice = historicalSlices.find(sl => sl.time === inp.current_et_time);
       const fallbackSlice = [...historicalSlices].filter(sl => sl.time <= inp.current_et_time).sort((a, b) => b.time.localeCompare(a.time))[0];
@@ -669,7 +673,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   resolution={tpoResolution}
                   profileData={{
                     tpo: { poc: tpo?.current_poc || 0, vah: tpo?.current_vah || 0, val: tpo?.current_val || 0 },
-                    volume: vol?.current_session || {} as ProfileSet
+                    volume: (vol?.current_session || {}) as ProfileSet
                   }}
                 />
               </div>
