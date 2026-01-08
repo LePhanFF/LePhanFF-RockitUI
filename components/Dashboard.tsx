@@ -629,27 +629,29 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   </div>
 
                   {/* Wick Parade */}
-                  <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg">
-                     <div className="flex items-center justify-between mb-5">
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Wick Parade ({wicks?.window_minutes || 60}m)</span>
-                        <Zap className="w-5 h-5 text-amber-400" />
-                     </div>
-                     <div className="flex items-center gap-6 mb-5">
-                        <div className="flex-1 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center">
-                           <span className="text-[10px] font-black uppercase text-emerald-600 mb-1">Bullish</span>
-                           <span className="text-3xl font-black text-emerald-400">{wicks?.bullish_wick_parade_count}</span>
-                        </div>
-                        <div className="flex-1 bg-rose-500/5 border border-rose-500/20 rounded-2xl p-4 flex flex-col items-center">
-                           <span className="text-[10px] font-black uppercase text-rose-600 mb-1">Bearish</span>
-                           <span className="text-3xl font-black text-rose-400">{wicks?.bearish_wick_parade_count}</span>
-                        </div>
-                     </div>
-                     {wicks?.note && (
-                        <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800/50">
-                           <p className="text-[10px] text-slate-500 font-mono leading-relaxed italic">"{wicks.note}"</p>
-                        </div>
-                     )}
-                  </div>
+                  {wicks && (
+                    <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg">
+                       <div className="flex items-center justify-between mb-5">
+                          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Wick Parade ({wicks.window_minutes || 60}m)</span>
+                          <Zap className="w-5 h-5 text-amber-400" />
+                       </div>
+                       <div className="flex items-center gap-6 mb-5">
+                          <div className="flex-1 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center">
+                             <span className="text-[10px] font-black uppercase text-emerald-600 mb-1">Bullish</span>
+                             <span className="text-3xl font-black text-emerald-400">{wicks.bullish_wick_parade_count}</span>
+                          </div>
+                          <div className="flex-1 bg-rose-500/5 border border-rose-500/20 rounded-2xl p-4 flex flex-col items-center">
+                             <span className="text-[10px] font-black uppercase text-rose-600 mb-1">Bearish</span>
+                             <span className="text-3xl font-black text-rose-400">{wicks.bearish_wick_parade_count}</span>
+                          </div>
+                       </div>
+                       {wicks.note && (
+                          <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800/50">
+                             <p className="text-[10px] text-slate-500 font-mono leading-relaxed italic">"{wicks.note}"</p>
+                          </div>
+                       )}
+                    </div>
+                  )}
 
                   {/* FVGs */}
                   <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">

@@ -193,10 +193,10 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
                        .filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
     const all = [...prices, currentPrice];
     
-    // Add levels
-    if (showInstitutional && levels) {
-      Object.values(levels).forEach(v => { if (typeof v === 'number' && v > 0) all.push(v); });
-    }
+    // NOTE: Intentionally EXCLUDING Globex/Institutional levels from default domain calc
+    // to ensure the chart stays focused on the intraday/current session range.
+    // If showInstitutional is true, the lines will still render, but won't force zoom out.
+    
     if (showProfile && profileLevels) {
       Object.values(profileLevels).forEach(v => { if (typeof v === 'number' && v > 0) all.push(v); });
     }
@@ -217,7 +217,7 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
     const padding = span * 0.1; // 10% padding
     
     return [min - padding, max + padding] as [number, number];
-  }, [data, currentPrice, levels, profileLevels, showInstitutional, showProfile, showEMA]);
+  }, [data, currentPrice, profileLevels, showProfile, showEMA]);
 
   // Active Y Domain
   const activeYDomain = yDomain || defaultYDomain;
@@ -416,16 +416,20 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
 
             {showInstitutional && levels && (
               <>
-                {levels.asia_high > 0 && <ReferenceLine y={levels.asia_high} stroke="#fbbf24" strokeDasharray="3 3" label={{ value: 'AH', position: 'right', fill: '#fbbf24', fontSize: 10, fontWeight: 900 }} />}
-                {levels.asia_low > 0 && <ReferenceLine y={levels.asia_low} stroke="#fbbf24" strokeDasharray="3 3" label={{ value: 'AL', position: 'right', fill: '#fbbf24', fontSize: 10, fontWeight: 900 }} />}
-                {levels.london_high > 0 && <ReferenceLine y={levels.london_high} stroke="#38bdf8" strokeDasharray="3 3" label={{ value: 'LH', position: 'right', fill: '#38bdf8', fontSize: 10, fontWeight: 900 }} />}
-                {levels.london_low > 0 && <ReferenceLine y={levels.london_low} stroke="#38bdf8" strokeDasharray="3 3" label={{ value: 'LL', position: 'right', fill: '#38bdf8', fontSize: 10, fontWeight: 900 }} />}
-                {levels.overnight_high > 0 && <ReferenceLine y={levels.overnight_high} stroke="#6366f1" strokeDasharray="3 3" label={{ value: 'ONH', position: 'right', fill: '#6366f1', fontSize: 10, fontWeight: 900 }} />}
-                {levels.overnight_low > 0 && <ReferenceLine y={levels.overnight_low} stroke="#6366f1" strokeDasharray="3 3" label={{ value: 'ONL', position: 'right', fill: '#6366f1', fontSize: 10, fontWeight: 900 }} />}
-                {levels.previous_day_high > 0 && <ReferenceLine y={levels.previous_day_high} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PDH', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />}
-                {levels.previous_day_low > 0 && <ReferenceLine y={levels.previous_day_low} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PDL', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />}
-                {levels.previous_week_high > 0 && <ReferenceLine y={levels.previous_week_high} stroke="#a78bfa" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PWH', position: 'right', fill: '#a78bfa', fontSize: 10, fontWeight: 900 }} />}
-                {levels.previous_week_low > 0 && <ReferenceLine y={levels.previous_week_low} stroke="#a78bfa" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PWL', position: 'right', fill: '#a78bfa', fontSize: 10, fontWeight: 900 }} />}
+                {levels.asia_high > 0 && <ReferenceLine y={levels.asia_high} stroke="#fbbf24" strokeDasharray="3 3" label={{ value: 'AH', position: 'right', fill: '#fbbf24', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                {levels.asia_low > 0 && <ReferenceLine y={levels.asia_low} stroke="#fbbf24" strokeDasharray="3 3" label={{ value: 'AL', position: 'right', fill: '#fbbf24', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                
+                {levels.london_high > 0 && <ReferenceLine y={levels.london_high} stroke="#38bdf8" strokeDasharray="5 5" label={{ value: 'LH', position: 'right', fill: '#38bdf8', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                {levels.london_low > 0 && <ReferenceLine y={levels.london_low} stroke="#38bdf8" strokeDasharray="5 5" label={{ value: 'LL', position: 'right', fill: '#38bdf8', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                
+                {levels.overnight_high > 0 && <ReferenceLine y={levels.overnight_high} stroke="#6366f1" strokeDasharray="10 5" label={{ value: 'ONH', position: 'right', fill: '#6366f1', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                {levels.overnight_low > 0 && <ReferenceLine y={levels.overnight_low} stroke="#6366f1" strokeDasharray="10 5" label={{ value: 'ONL', position: 'right', fill: '#6366f1', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                
+                {levels.previous_day_high > 0 && <ReferenceLine y={levels.previous_day_high} stroke="#94a3b8" strokeWidth={1} strokeDasharray="2 2" label={{ value: 'PDH', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                {levels.previous_day_low > 0 && <ReferenceLine y={levels.previous_day_low} stroke="#94a3b8" strokeWidth={1} strokeDasharray="2 2" label={{ value: 'PDL', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                
+                {levels.previous_week_high > 0 && <ReferenceLine y={levels.previous_week_high} stroke="#a78bfa" strokeWidth={1} strokeDasharray="10 10" label={{ value: 'PWH', position: 'right', fill: '#a78bfa', fontSize: 10, fontWeight: 900, dx: 10 }} />}
+                {levels.previous_week_low > 0 && <ReferenceLine y={levels.previous_week_low} stroke="#a78bfa" strokeWidth={1} strokeDasharray="10 10" label={{ value: 'PWL', position: 'right', fill: '#a78bfa', fontSize: 10, fontWeight: 900, dx: 10 }} />}
               </>
             )}
 
