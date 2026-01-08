@@ -15,12 +15,13 @@ import {
   Loader2,
   TerminalSquare,
   Activity,
-  Network
+  Network,
+  Pause
 } from 'lucide-react';
 
 // Public GCS Bucket
 const GCS_BUCKET_BASE = "https://storage.googleapis.com/rockit-data"; 
-const REFRESH_INTERVAL_SEC = 30; 
+const REFRESH_INTERVAL_SEC = 120; 
 
 const hardenedClean = (raw: string): string => {
   if (!raw) return "";
@@ -71,6 +72,7 @@ const App: React.FC = () => {
   const [isListLoading, setIsListLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'error' | 'connecting'>('connecting');
   const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SEC);
+  const [isPaused, setIsPaused] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   
   const [logs, setLogs] = useState<string[]>([]);
@@ -206,8 +208,15 @@ const App: React.FC = () => {
     }
   };
 
+  // Initial Load
   useEffect(() => {
     fetchFileList();
+  }, []);
+
+  // Countdown Timer
+  useEffect(() => {
+    if (isPaused) return;
+
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
@@ -218,7 +227,7 @@ const App: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isPaused]);
 
   const processedSnapshots = useMemo(() => {
     return snapshots.map(s => {
@@ -287,9 +296,16 @@ const App: React.FC = () => {
                 <Server className="w-2.5 h-2.5" />
                 {connectionStatus === 'connected' ? 'GCS: LIVE' : connectionStatus === 'error' ? 'GCS: ERROR' : 'GCS: INIT'}
               </div>
-              <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                <Timer className="w-2.5 h-2.5" /> {countdown}S
-              </div>
+              <button 
+                onClick={() => setIsPaused(!isPaused)}
+                className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors ${
+                  isPaused ? 'text-amber-400 animate-pulse' : 'text-slate-500 hover:text-indigo-400'
+                }`}
+                title={isPaused ? "Resume Auto-Refresh" : "Pause Auto-Refresh"}
+              >
+                {isPaused ? <Pause className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
+                {isPaused ? 'PAUSED' : `${countdown}S`}
+              </button>
             </div>
           </div>
         </div>
