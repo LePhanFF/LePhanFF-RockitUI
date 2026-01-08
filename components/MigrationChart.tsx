@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { 
   ComposedChart, 
@@ -423,6 +424,8 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
                 {levels.overnight_low > 0 && <ReferenceLine y={levels.overnight_low} stroke="#6366f1" strokeDasharray="3 3" label={{ value: 'ONL', position: 'right', fill: '#6366f1', fontSize: 10, fontWeight: 900 }} />}
                 {levels.previous_day_high > 0 && <ReferenceLine y={levels.previous_day_high} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PDH', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />}
                 {levels.previous_day_low > 0 && <ReferenceLine y={levels.previous_day_low} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PDL', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />}
+                {levels.previous_week_high > 0 && <ReferenceLine y={levels.previous_week_high} stroke="#a78bfa" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PWH', position: 'right', fill: '#a78bfa', fontSize: 10, fontWeight: 900 }} />}
+                {levels.previous_week_low > 0 && <ReferenceLine y={levels.previous_week_low} stroke="#a78bfa" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PWL', position: 'right', fill: '#a78bfa', fontSize: 10, fontWeight: 900 }} />}
               </>
             )}
 

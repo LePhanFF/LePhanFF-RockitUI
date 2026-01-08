@@ -93,6 +93,21 @@ export interface MarketSnapshot {
         migration_direction: string;
         steps_since_1030: number;
         note: string;
+
+        // Extended Fields
+        direction?: string;
+        net_migration_pts?: number;
+        avg_velocity_per_30min?: number;
+        abs_velocity?: number;
+        relative_retain_percent?: number;
+        accelerating?: boolean;
+        decelerating?: boolean;
+        cluster_range_last_4?: number;
+        is_stabilizing?: boolean;
+        price_vs_dpoc_cluster?: string;
+        reclaiming_opposite?: boolean;
+        prior_exhausted?: boolean;
+        dpoc_regime?: string;
       };
       dpoc_history?: DPOCHistoryEntry[];
       volume_profile: {

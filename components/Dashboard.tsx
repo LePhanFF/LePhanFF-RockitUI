@@ -33,7 +33,9 @@ import {
   GitCommit,
   Maximize2,
   Minimize2,
-  BarChart2
+  BarChart2,
+  Waypoints,
+  Gauge
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 import TPOChart from './TPOChart';
@@ -44,7 +46,7 @@ interface DashboardProps {
   allSnapshots?: MarketSnapshot[];
 }
 
-type TabType = 'brief' | 'logic' | 'intraday' | 'globex' | 'profile' | 'tpo' | 'thinking';
+type TabType = 'brief' | 'logic' | 'intraday' | 'dpoc' | 'globex' | 'profile' | 'tpo' | 'thinking';
 
 const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [] }) => {
   const [activeTab, setActiveTab] = useState<TabType>('brief');
@@ -53,7 +55,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
   const [showIB, setShowIB] = useState(true);
   const [showProfile, setShowProfile] = useState(true);
   const [showFVG, setShowFVG] = useState(true);
-  const [showPreMarket, setShowPreMarket] = useState(false);
+  const [showGlobex, setShowGlobex] = useState(false);
   const [showEMAs, setShowEMAs] = useState(false);
   const [showDPOC, setShowDPOC] = useState(true);
   const [showOHLC, setShowOHLC] = useState(true);
@@ -67,9 +69,10 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
   const tpo = intraday?.tpo_profile;
   const fvgs = intraday?.fvg_detection;
   const wicks = intraday?.wick_parade;
+  const dpocData = intraday?.dpoc_migration;
   
   // Prefer dpoc_history from dpoc_migration, fall back to intraday direct property
-  const dpocHistory = intraday?.dpoc_migration?.dpoc_history || intraday?.dpoc_history;
+  const dpocHistory = dpocData?.dpoc_history || intraday?.dpoc_history;
 
   // Calculate or retrieve DPOC slices (Accumulate from history to ensure no drops)
   const derivedSlices = useMemo(() => {
@@ -134,8 +137,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
       const t = inp?.current_et_time || '00:00';
       const isPostIB = t >= "10:30";
 
-      // DPOC Logic: Project the history onto the chart
-      // Find the most recent DPOC slice at or before time t
       let activeDPOC = inp?.intraday?.volume_profile?.current_session?.poc || ibData?.current_close || 0;
       
       const applicableSlices = historicalSlices.filter(slice => slice.time <= t);
@@ -143,13 +144,12 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
         activeDPOC = applicableSlices[applicableSlices.length - 1].dpoc;
       }
 
-      // Exact match for marker
       const matchingSlice = historicalSlices.find(slice => slice.time === t);
 
       return {
         time: t,
         dpoc: activeDPOC,
-        dpoc_marker: matchingSlice ? matchingSlice.dpoc : null, // Specific field for the bright circle marker
+        dpoc_marker: matchingSlice ? matchingSlice.dpoc : null, 
         open: ibData?.current_open || 0,
         high: ibData?.current_high || 0,
         low: ibData?.current_low || 0,
@@ -220,6 +220,14 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     </button>
   );
 
+  const getRegimeColor = (regime: string = '') => {
+    if (regime.includes('trending_on_the_move')) return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+    if (regime.includes('potential_bpr_reversal')) return 'text-purple-400 bg-purple-500/10 border-purple-500/30';
+    if (regime.includes('stabilizing_hold')) return 'text-sky-400 bg-sky-500/10 border-sky-500/30';
+    if (regime.includes('trending_fading_momentum')) return 'text-amber-400 bg-amber-500/10 border-amber-500/30';
+    return 'text-slate-400 bg-slate-800 border-slate-700';
+  };
+
   return (
     <div className="flex flex-col h-full gap-4 overflow-hidden">
       {/* Strategic Banner */}
@@ -267,7 +275,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                <h2 className="text-xs font-black uppercase tracking-widest text-white">Migration Matrix</h2>
              </div>
              <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 shadow-xl scale-90">
-                <ToggleButton active={showPreMarket} onClick={() => setShowPreMarket(!showPreMarket)} icon={Globe} label="Premarket" activeClass="bg-amber-600 text-white shadow-lg" />
+                <ToggleButton active={showGlobex} onClick={() => setShowGlobex(!showGlobex)} icon={Globe} label="Globex" activeClass="bg-amber-600 text-white shadow-lg" />
                 <ToggleButton active={showProfile} onClick={() => setShowProfile(!showProfile)} icon={Layers} label="Profile" activeClass="bg-sky-600 text-white shadow-lg" />
                 <ToggleButton active={showDPOC} onClick={() => setShowDPOC(!showDPOC)} icon={GitCommit} label="DPOC Trace" activeClass="bg-indigo-600 text-white shadow-lg" />
                 <div className="w-px h-5 bg-slate-700/50 mx-1"></div>
@@ -286,7 +294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
               showOHLC={showOHLC} 
               showVWAP={showVWAP} 
               showEMA={showEMAs}
-              showInstitutional={showPreMarket}
+              showInstitutional={showGlobex}
               showIB={showIB}
               showProfile={showProfile}
               showFVG={showFVG}
@@ -313,6 +321,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 <TabButton id="brief" label="Brief" icon={Info} />
                 <TabButton id="logic" label="Logic" icon={Cpu} />
                 <TabButton id="intraday" label="Intraday" icon={Timer} />
+                <TabButton id="dpoc" label="DPOC" icon={Waypoints} />
                 <TabButton id="globex" label="Globex" icon={Globe} />
                 <TabButton id="profile" label="Profile" icon={BarChartHorizontal} />
                 <TabButton id="tpo" label="TPO" icon={Grid3X3} />
@@ -407,7 +416,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
             {activeTab === 'logic' && (
               <div className="space-y-4 animate-in fade-in duration-500 pb-4">
-                 
                  {/* Logic Note */}
                  {core?.note && (
                     <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl flex items-start gap-3">
@@ -415,8 +423,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                         <p className="text-xs font-mono font-medium text-indigo-200 leading-relaxed italic">"{core.note}"</p>
                     </div>
                  )}
-
-                 {/* 1. IB Acceptance */}
                  <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
                      <div className="flex items-center gap-3 mb-4">
                         <Shield className="w-5 h-5 text-orange-400" />
@@ -450,7 +456,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      </div>
                  </div>
 
-                 {/* 2. DPOC Logic Grid */}
                  <div className="grid grid-cols-2 gap-4">
                     <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
                         <div className="flex items-center gap-2 mb-2">
@@ -505,7 +510,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                     </div>
                  </div>
 
-                 {/* 3. Migration Stats */}
                  <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
                      <div className="flex items-center gap-3 mb-4">
                         <Route className="w-5 h-5 text-violet-400" />
@@ -627,7 +631,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   {/* Wick Parade */}
                   <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg">
                      <div className="flex items-center justify-between mb-5">
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Wick Parade ({wicks?.window_minutes}m)</span>
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Wick Parade ({wicks?.window_minutes || 60}m)</span>
                         <Zap className="w-5 h-5 text-amber-400" />
                      </div>
                      <div className="flex items-center gap-6 mb-5">
@@ -647,37 +651,130 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      )}
                   </div>
 
-                  {/* DPOC Migration Log */}
-                  <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg">
-                     <div className="flex items-center justify-between mb-4">
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">DPOC Migration Log</span>
-                        <GitCommit className="w-5 h-5 text-indigo-400" />
-                     </div>
-                     {derivedSlices.length > 0 ? (
-                        <div className="overflow-y-auto max-h-60 custom-scrollbar rounded-xl border border-slate-800/50">
-                           <table className="w-full text-left">
-                              <thead className="bg-slate-950/50 sticky top-0 z-10 backdrop-blur-sm">
-                                 <tr>
-                                    <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider">Time</th>
-                                    <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider text-right">DPOC</th>
-                                 </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-800/30">
-                                 {derivedSlices.map((slice, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                                       <td className="px-4 py-2 text-[10px] font-mono font-bold text-slate-300">{slice.time}</td>
-                                       <td className="px-4 py-2 text-[10px] font-mono font-bold text-indigo-400 text-right">{slice.dpoc.toFixed(2)}</td>
-                                    </tr>
-                                 ))}
-                              </tbody>
-                           </table>
-                        </div>
-                     ) : (
-                        <div className="text-center py-4 text-[10px] text-slate-600 italic">No migration slices recorded yet.</div>
-                     )}
+                  {/* FVGs */}
+                  <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
+                       <div className="flex items-center gap-2 mb-4">
+                         <Zap className="w-4 h-4 text-amber-400" />
+                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-300">Active FVGs</span>
+                      </div>
+                      <div className="space-y-2">
+                        {['1h_fvg', '15min_fvg', '5min_fvg'].map((key) => {
+                             const list = (fvgs as any)?.[key] || [];
+                             return (
+                                 <div key={key} className="flex items-start gap-3 border-b border-slate-800/50 pb-2 last:border-0">
+                                    <span className="text-[10px] font-mono text-slate-500 w-12 shrink-0">{key.replace('_fvg', '').toUpperCase()}</span>
+                                    <div className="flex-1 flex flex-wrap gap-1">
+                                       {list.length > 0 ? list.map((f: any, i: number) => (
+                                           <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded border font-mono ${f.type === 'bullish' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                                              {f.bottom}-{f.top}
+                                           </span>
+                                       )) : <span className="text-[9px] text-slate-700 italic">None</span>}
+                                    </div>
+                                 </div>
+                             );
+                        })}
+                      </div>
+                  </div>
+               </div>
+            )}
+            
+            {/* ... rest of component ... */}
+            {activeTab === 'dpoc' && (
+               <div className="space-y-4 animate-in fade-in duration-500 pb-4">
+                  {/* Regime Banner */}
+                  <div className={`p-5 rounded-3xl border text-center ${getRegimeColor(dpocData?.dpoc_regime)}`}>
+                     <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 mb-2 block">DPOC Regime</span>
+                     <h2 className="text-lg font-black uppercase tracking-tight leading-none">
+                       {dpocData?.dpoc_regime?.replace(/_/g, ' ') || 'ANALYZING...'}
+                     </h2>
                   </div>
 
-                  {/* DPOC History Table */}
+                  {/* Primary Metrics */}
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
+                         <div className="flex items-center gap-2 mb-3">
+                            <Route className="w-4 h-4 text-indigo-400" />
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Vector</span>
+                         </div>
+                         <div className="space-y-3">
+                             <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-500">Direction</span>
+                                <span className={`text-sm font-black uppercase ${
+                                   dpocData?.direction === 'up' ? 'text-emerald-400' : dpocData?.direction === 'down' ? 'text-rose-400' : 'text-slate-300'
+                                }`}>{dpocData?.direction || 'FLAT'}</span>
+                             </div>
+                             <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-500">Net Mig.</span>
+                                <span className="text-sm font-mono font-black text-white">{dpocData?.net_migration_pts} pts</span>
+                             </div>
+                             <div className="h-px bg-slate-800/50" />
+                             <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-500">Velocity (Avg)</span>
+                                <span className="text-xs font-mono font-bold text-slate-300">{dpocData?.avg_velocity_per_30min}</span>
+                             </div>
+                             <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-500">Velocity (Abs)</span>
+                                <span className="text-xs font-mono font-bold text-slate-300">{dpocData?.abs_velocity}</span>
+                             </div>
+                         </div>
+                     </div>
+
+                     <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
+                         <div className="flex items-center gap-2 mb-3">
+                            <Gauge className="w-4 h-4 text-amber-400" />
+                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Dynamics</span>
+                         </div>
+                         <div className="space-y-3">
+                             <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-500">Retain %</span>
+                                <span className="text-sm font-mono font-black text-white">{dpocData?.relative_retain_percent}%</span>
+                             </div>
+                             <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-500">Cluster Rng</span>
+                                <span className="text-xs font-mono font-bold text-slate-300">{dpocData?.cluster_range_last_4} pts</span>
+                             </div>
+                             <div className="h-px bg-slate-800/50" />
+                             <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-500">Price vs Cluster</span>
+                                <span className={`text-[10px] font-black uppercase ${
+                                   dpocData?.price_vs_dpoc_cluster === 'above' ? 'text-emerald-400' : 
+                                   dpocData?.price_vs_dpoc_cluster === 'below' ? 'text-rose-400' : 'text-slate-300'
+                                }`}>{dpocData?.price_vs_dpoc_cluster}</span>
+                             </div>
+                         </div>
+                     </div>
+                  </div>
+
+                  {/* Status Flags */}
+                  <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
+                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-3">Signal State</span>
+                     <div className="flex flex-wrap gap-2">
+                        <span className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase ${
+                           dpocData?.accelerating ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-900 text-slate-600 border-slate-800'
+                        }`}>Accelerating</span>
+                        <span className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase ${
+                           dpocData?.decelerating ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-900 text-slate-600 border-slate-800'
+                        }`}>Decelerating</span>
+                        <span className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase ${
+                           dpocData?.is_stabilizing ? 'bg-sky-500/20 text-sky-400 border-sky-500/30' : 'bg-slate-900 text-slate-600 border-slate-800'
+                        }`}>Stabilizing</span>
+                        <span className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase ${
+                           dpocData?.reclaiming_opposite ? 'bg-purple-500/20 text-purple-400 border-purple-500/30' : 'bg-slate-900 text-slate-600 border-slate-800'
+                        }`}>Reclaiming Opp</span>
+                        <span className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase ${
+                           dpocData?.prior_exhausted ? 'bg-rose-500/20 text-rose-400 border-rose-500/30' : 'bg-slate-900 text-slate-600 border-slate-800'
+                        }`}>Prior Exhausted</span>
+                     </div>
+                  </div>
+
+                  {/* Note */}
+                  {dpocData?.note && (
+                     <div className="p-4 bg-slate-900/40 border border-slate-800 rounded-2xl">
+                        <p className="text-[10px] text-slate-400 italic leading-relaxed">"{dpocData.note}"</p>
+                     </div>
+                  )}
+
+                  {/* History Table */}
                   {dpocHistory && dpocHistory.length > 0 && (
                       <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg mt-4">
                           <div className="flex items-center justify-between mb-4">
@@ -725,7 +822,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                </div>
             )}
             
-            {/* ... other tabs ... */}
             {activeTab === 'globex' && (
                <div className="space-y-4 animate-in fade-in duration-500 pb-4">
                   {[
@@ -812,6 +908,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                </div>
             )}
             
+            {/* ... rest of component ... */}
             {activeTab === 'profile' && (
               <div className="space-y-5 animate-in fade-in duration-500 h-full flex flex-col">
                 <div className="grid grid-cols-1 gap-5">
