@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { 
   ComposedChart, 
   Area, 
@@ -9,13 +9,11 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   ReferenceArea,
-  Bar,
-  Cell,
   Line,
   Brush,
-  Scatter
+  Bar
 } from 'recharts';
-import { DPOCSlice, FVG } from '../types';
+import { FVG } from '../types';
 
 interface MigrationChartProps {
   data: any[];
@@ -27,7 +25,7 @@ interface MigrationChartProps {
   showIB: boolean;
   showProfile: boolean;
   showFVG: boolean;
-  showMigrationTrace: boolean;
+  showDPOC: boolean;
   levels: {
     asia_high: number;
     asia_low: number;
@@ -46,269 +44,501 @@ interface MigrationChartProps {
     val: number;
   };
   fvgData?: {
-    daily_fvg: FVG[];
-    "4h_fvg": FVG[];
     "1h_fvg": FVG[];
     "15min_fvg": FVG[];
     "5min_fvg": FVG[];
   };
 }
 
+const PulsingDot = (props: any) => {
+    const { cx, cy, stroke, index, data } = props;
+    if (index === data.length - 1) {
+        return (
+            <svg x={cx - 6} y={cy - 6} width={12} height={12}>
+                <circle cx="6" cy="6" r="4" fill={stroke} className="animate-ping opacity-75" />
+                <circle cx="6" cy="6" r="3" fill={stroke} />
+            </svg>
+        );
+    }
+    return null;
+};
+
+// Custom Dot for DPOC Slices (Bright Circle)
+const DPOCSliceDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (payload && payload.dpoc_marker !== null && payload.dpoc_marker !== undefined) {
+        return (
+            <svg x={cx - 10} y={cy - 10} width={20} height={20} className="overflow-visible">
+                {/* Bright Glow effect */}
+                <circle cx="10" cy="10" r="8" fill="#22d3ee" fillOpacity="0.6" className="animate-ping" style={{ animationDuration: '2s' }} />
+                <circle cx="10" cy="10" r="6" fill="#22d3ee" fillOpacity="0.3" className="animate-pulse" />
+                <circle cx="10" cy="10" r="3.5" fill="#fff" stroke="#0891b2" strokeWidth={1.5} />
+            </svg>
+        );
+    }
+    return null;
+};
+
+const CandleShape = (props: any) => {
+    const { x, y, width, height, payload } = props;
+    const { open, close, high, low } = payload;
+    
+    // Validate data
+    if (!open || !close || !high || !low) return null;
+
+    // Determine direction
+    const isUp = close >= open;
+    const color = isUp ? '#10b981' : '#f43f5e'; // Emerald-500 : Rose-500
+    
+    // Calculate scaling ratio: height (pixels) / range (value)
+    // Note: Recharts 'y' is the top pixel (corresponding to 'high' value here because we map [low, high])
+    // 'height' is the total pixel height of the range
+    const range = high - low;
+    if (range <= 0) return null;
+    
+    const ratio = height / range;
+    
+    // Calculate y positions relative to 'y' (top)
+    const yOpen = y + (high - open) * ratio;
+    const yClose = y + (high - close) * ratio;
+    const yHigh = y;
+    const yLow = y + height;
+    
+    const bodyTop = Math.min(yOpen, yClose);
+    const bodyHeight = Math.max(1, Math.abs(yOpen - yClose));
+
+    return (
+        <g>
+            {/* Wick */}
+            <line x1={x + width / 2} y1={yHigh} x2={x + width / 2} y2={yLow} stroke={color} strokeWidth={1.5} opacity={0.8} />
+            {/* Body */}
+            <rect x={x} y={bodyTop} width={width} height={bodyHeight} fill={color} stroke="none" rx={1} />
+        </g>
+    );
+};
+
 const MigrationChart: React.FC<MigrationChartProps> = ({ 
-  data, 
-  currentPrice, 
-  showOHLC, 
-  showVWAP, 
-  showEMA,
-  showInstitutional,
-  showIB,
-  showProfile,
-  showFVG,
-  showMigrationTrace,
-  levels,
-  profileLevels,
-  fvgData 
+  data, currentPrice, showOHLC, showVWAP, showEMA, showInstitutional, showIB, showProfile, showFVG, showDPOC, levels, profileLevels, fvgData 
 }) => {
-  const sessionData = useMemo(() => {
-    return (data || [])
-      .filter(d => {
-        if (!d.time) return false;
-        const [hours] = d.time.split(':').map(Number);
-        return hours >= 8; 
-      })
-      .sort((a, b) => a.time.localeCompare(b.time));
+  // --- State ---
+  // Brush (X-Axis) State: indices of the full dataset
+  const [brushRange, setBrushRange] = useState<{ start: number, end: number } | null>(null);
+  
+  // Y-Axis State: [min, max]
+  const [yDomain, setYDomain] = useState<[number, number] | null>(null);
+
+  // Selection Box State (for visual feedback during drag)
+  const [selection, setSelection] = useState<{
+    xLabel1: string | null;
+    xLabel2: string | null;
+    y1: number | null;
+    y2: number | null;
+    isDragging: boolean;
+  }>({ xLabel1: null, xLabel2: null, y1: null, y2: null, isDragging: false });
+
+  // Chart Layout State (for pixel-to-value conversion)
+  const [containerHeight, setContainerHeight] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // --- Helpers ---
+
+  // Measure container for coordinate mapping
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  // Initialize Brush on data load
+  useEffect(() => {
+    if (data && data.length > 0 && brushRange === null) {
+       setBrushRange({ start: 0, end: data.length - 1 });
+    }
   }, [data]);
-
-  const yDomain = useMemo(() => {
-    const allValues: number[] = [
-      ...sessionData.map(d => d.dpoc),
-      ...sessionData.map(d => d.high || d.dpoc),
-      ...sessionData.map(d => d.low || d.dpoc),
-      currentPrice,
-    ].filter(v => typeof v === 'number' && !isNaN(v) && v !== 0);
-    
-    if (showInstitutional) {
-      const inst = [levels.asia_high, levels.asia_low, levels.london_high, levels.london_low, levels.overnight_high, levels.overnight_low];
-      allValues.push(...inst.filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
-    }
-
-    if (showIB) {
-       allValues.push(...sessionData.map(d => d.ibh).filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
-       allValues.push(...sessionData.map(d => d.ibl).filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
-    }
-    
-    if (showProfile) {
-      const prof = [profileLevels.vah, profileLevels.poc, profileLevels.val];
-      allValues.push(...prof.filter(v => typeof v === 'number' && !isNaN(v) && v !== 0));
-    }
-
-    if (allValues.length === 0) return [0, 100];
-    
-    const min = Math.min(...allValues);
-    const max = Math.max(...allValues);
-    const padding = (max - min) * 0.1 || 20;
-    return [min - padding, max + padding];
-  }, [sessionData, currentPrice, levels, profileLevels, showInstitutional, showIB, showProfile]);
 
   const activeFvgs = useMemo(() => {
     if (!fvgData || !showFVG) return [];
     return [
-      ...(fvgData["1h_fvg"] || []).map(f => ({ ...f, timeframe: '1H' })),
-      ...(fvgData["15min_fvg"] || []).map(f => ({ ...f, timeframe: '15M' })),
-      ...(fvgData["5min_fvg"] || []).map(f => ({ ...f, timeframe: '5M' }))
-    ];
+      ...(fvgData["1h_fvg"] || []),
+      ...(fvgData["15min_fvg"] || []),
+      ...(fvgData["5min_fvg"] || [])
+    ].filter(f => f && typeof f.bottom === 'number' && typeof f.top === 'number');
   }, [fvgData, showFVG]);
 
-  const renderCustomScatterDot = (props: any) => {
-    const { cx, cy, payload } = props;
-    if (!payload.isMigrationStep) return null;
+  // Determine current IB levels from data for labeling
+  const lastIBH = useMemo(() => {
+    if (!data) return null;
+    const valid = data.filter(d => d.ibh !== null && d.ibh !== undefined);
+    return valid.length > 0 ? valid[valid.length - 1].ibh : null;
+  }, [data]);
 
-    return (
-      <g key={`dot-${payload.time}`}>
-        <defs>
-          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-        </defs>
-        
-        {/* Core Node */}
-        <circle 
-          cx={cx} cy={cy} r={payload.isJump ? 7 : 5} 
-          fill={payload.isJump ? "#a3e635" : "#06b6d4"} 
-          stroke="#fff" 
-          strokeWidth={2} 
-          filter="url(#glow)"
-          className={payload.isJump ? "animate-pulse" : ""}
-        />
-        
-        {/* Outer Ring for Jumps */}
-        {payload.isJump && (
-          <circle 
-            cx={cx} cy={cy} r={12} 
-            fill="transparent" 
-            stroke="#a3e635" 
-            strokeOpacity={0.5} 
-            strokeWidth={1.5}
-            className="animate-ping"
-            style={{ animationDuration: '3s' }}
-          />
-        )}
-      </g>
-    );
+  const lastIBL = useMemo(() => {
+    if (!data) return null;
+    const valid = data.filter(d => d.ibl !== null && d.ibl !== undefined);
+    return valid.length > 0 ? valid[valid.length - 1].ibl : null;
+  }, [data]);
+
+  // Calculate default Y domain based on ALL data
+  const defaultYDomain = useMemo(() => {
+    if (!data || data.length === 0) return [0, 100] as [number, number];
+    
+    // Collect all relevant price points
+    const prices = data.flatMap(d => [d.dpoc, d.high, d.low, d.close, d.ibh, d.ibl])
+                       .filter(v => typeof v === 'number' && !isNaN(v) && v > 0);
+    const all = [...prices, currentPrice];
+    
+    // Add levels
+    if (showInstitutional && levels) {
+      Object.values(levels).forEach(v => { if (typeof v === 'number' && v > 0) all.push(v); });
+    }
+    if (showProfile && profileLevels) {
+      Object.values(profileLevels).forEach(v => { if (typeof v === 'number' && v > 0) all.push(v); });
+    }
+    if (showEMA) {
+       data.forEach(d => {
+         if (d.ema20) all.push(d.ema20);
+         if (d.ema50) all.push(d.ema50);
+         if (d.ema200) all.push(d.ema200);
+       });
+    }
+
+    const valid = all.filter(v => typeof v === 'number' && v > 0);
+    if (valid.length === 0) return [0, 100] as [number, number];
+    
+    const min = Math.min(...valid);
+    const max = Math.max(...valid);
+    const span = max - min;
+    const padding = span * 0.1; // 10% padding
+    
+    return [min - padding, max + padding] as [number, number];
+  }, [data, currentPrice, levels, profileLevels, showInstitutional, showProfile, showEMA]);
+
+  // Active Y Domain
+  const activeYDomain = yDomain || defaultYDomain;
+
+  // Convert Pixel Y to Value Y
+  const getYValue = useCallback((chartY: number) => {
+    // Recharts Margins: top 20, bottom 5
+    const marginTop = 20;
+    const marginBottom = 5;
+    const drawHeight = containerHeight - marginTop - marginBottom;
+    
+    if (drawHeight <= 0) return activeYDomain[0];
+
+    // Relative Y from top of drawing area
+    // Clamp to drawing area
+    const relY = Math.max(0, Math.min(drawHeight, chartY - marginTop));
+    
+    // Pixel 0 (top) = Max Value
+    // Pixel H (bottom) = Min Value
+    const ratio = relY / drawHeight;
+    const [min, max] = activeYDomain;
+    
+    // Value = Max - ratio * (Max - Min)
+    return max - ratio * (max - min);
+  }, [containerHeight, activeYDomain]);
+
+  // --- Handlers ---
+
+  const handleMouseDown = (e: any) => {
+    if (!e) return;
+    const { activeLabel, chartY } = e;
+    if (!activeLabel || chartY === undefined) return;
+    
+    setSelection({
+      xLabel1: activeLabel,
+      xLabel2: activeLabel,
+      y1: getYValue(chartY),
+      y2: getYValue(chartY),
+      isDragging: true
+    });
   };
 
-  if (sessionData.length === 0) return (
-    <div className="h-full w-full flex items-center justify-center italic text-slate-700 font-black uppercase tracking-widest bg-slate-950/20">
-      Awaiting Market Intelligence...
-    </div>
-  );
+  const handleMouseMove = (e: any) => {
+    if (!selection.isDragging || !e) return;
+    const { activeLabel, chartY } = e;
+    
+    if (activeLabel) {
+      setSelection(prev => ({
+        ...prev,
+        xLabel2: activeLabel,
+        y2: chartY !== undefined ? getYValue(chartY) : prev.y2
+      }));
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!selection.isDragging) return;
+    
+    const { xLabel1, xLabel2, y1, y2 } = selection;
+    setSelection(prev => ({ ...prev, isDragging: false, xLabel1: null, xLabel2: null, y1: null, y2: null }));
+
+    if (!xLabel1 || !xLabel2 || y1 === null || y2 === null) return;
+    if (xLabel1 === xLabel2 && Math.abs(y1 - y2) < 0.5) return; // Prevent accidental clicks
+
+    // Calculate X Range Indices
+    const idx1 = data.findIndex(d => d.time === xLabel1);
+    const idx2 = data.findIndex(d => d.time === xLabel2);
+    
+    if (idx1 === -1 || idx2 === -1) return;
+
+    const start = Math.min(idx1, idx2);
+    const end = Math.max(idx1, idx2);
+
+    // Calculate Y Range
+    const newYMin = Math.min(y1, y2);
+    const newYMax = Math.max(y1, y2);
+
+    // Apply Zoom
+    setBrushRange({ start, end });
+    setYDomain([newYMin, newYMax]);
+  };
+
+  const handleReset = () => {
+    setBrushRange({ start: 0, end: data.length - 1 });
+    setYDomain(null); // Reset to default calculated
+  };
+
+  // Zoom slider on the left (adjusts Y scale relative to center)
+  const handleLeftSliderChange = (val: number) => {
+    // val is magnification factor (0.5 to 5)
+    // 1 = default domain
+    const [defMin, defMax] = defaultYDomain;
+    const defCenter = (defMin + defMax) / 2;
+    const defSpan = defMax - defMin;
+    
+    const newSpan = defSpan / val;
+    const newMin = defCenter - newSpan / 2;
+    const newMax = defCenter + newSpan / 2;
+    
+    setYDomain([newMin, newMax]);
+  };
+
+  // Compute current zoom level for slider sync
+  const currentZoomLevel = useMemo(() => {
+    if (!yDomain) return 1;
+    const [defMin, defMax] = defaultYDomain;
+    const [currMin, currMax] = yDomain;
+    const defSpan = defMax - defMin;
+    const currSpan = currMax - currMin;
+    if (currSpan === 0) return 1;
+    return defSpan / currSpan;
+  }, [yDomain, defaultYDomain]);
+
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-full w-full flex items-center justify-center bg-slate-900/10 text-slate-700 text-[10px] font-black uppercase tracking-widest italic">
+        Awaiting Temporal Data Flow...
+      </div>
+    );
+  }
+
+  // Ensure Brush range is valid
+  const safeBrushRange = brushRange || { start: 0, end: data.length - 1 };
 
   return (
-    <div className="h-full w-full flex flex-col p-1">
-      <div className="flex-1 select-none relative">
+    <div className="h-full w-full flex gap-3" ref={containerRef}>
+      
+      {/* Left Sidebar Control (Y-Axis Zoom Slider) */}
+      <div className="w-8 flex flex-col items-center justify-center py-3 bg-slate-950/40 rounded-xl border border-slate-800/50 shrink-0 z-10 backdrop-blur-sm shadow-xl">
+           <div className="h-full flex items-center justify-center w-full">
+               <input 
+                 type="range" 
+                 min="0.5" 
+                 max="10" 
+                 step="0.1" 
+                 value={currentZoomLevel} 
+                 onChange={(e) => handleLeftSliderChange(parseFloat(e.target.value))}
+                 onDoubleClick={handleReset}
+                 className="h-full w-1.5 appearance-none bg-slate-800 rounded-full cursor-pointer accent-indigo-500 hover:accent-indigo-400"
+                 style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+                 title="Zoom Y Axis (Double-click to Auto Fit)"
+               />
+           </div>
+      </div>
+
+      <div className="flex-1 min-w-0 relative group select-none">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={sessionData} margin={{ top: 10, right: 80, left: 0, bottom: 0 }}>
+          <ComposedChart 
+            data={data} 
+            margin={{ top: 20, right: 60, left: 0, bottom: 5 }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onDoubleClick={handleReset}
+          >
             <defs>
-              <linearGradient id="colorDpoc" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
                 <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} strokeOpacity={0.08} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} strokeOpacity={0.1} />
+            
             <XAxis 
-              dataKey="time" 
-              stroke="#64748b" 
-              fontSize={9} 
-              fontWeight={900} 
-              axisLine={false} 
-              tickLine={false} 
-              interval="preserveStartEnd"
+               dataKey="time" 
+               stroke="#475569" 
+               fontSize={11} 
+               axisLine={false} 
+               tickLine={false} 
+               fontWeight={700}
             />
+            
             <YAxis 
-              yAxisId="right" 
-              domain={yDomain} 
-              stroke="#94a3b8" 
-              fontSize={11} 
-              fontWeight={900} 
+              domain={activeYDomain} 
+              allowDataOverflow={true}
               orientation="right" 
+              stroke="#475569" 
+              fontSize={12} 
               axisLine={false} 
               tickLine={false} 
-              tickFormatter={(val) => val.toFixed(0)} 
+              tickFormatter={v => v.toFixed(0)} 
+              type="number"
+              fontWeight={700}
             />
             
             <Tooltip 
-              contentStyle={{ backgroundColor: '#020617', border: '1px solid #334155', borderRadius: '12px', fontSize: '11px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8)' }}
+              contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px', fontSize: '11px', color: '#f8fafc' }}
               itemStyle={{ fontWeight: 900 }}
-              labelStyle={{ color: '#6366f1', marginBottom: '4px', fontWeight: 900 }}
+              isAnimationActive={false}
             />
 
-            {showFVG && activeFvgs.map((fvg, i) => (
-              <ReferenceArea 
-                key={`fvg-${i}`} 
-                yAxisId="right" 
-                y1={fvg.bottom} 
-                y2={fvg.top} 
-                fill={fvg.type === 'bullish' ? '#10b981' : '#f43f5e'} 
-                fillOpacity={0.5} 
-                stroke={fvg.type === 'bullish' ? '#10b981' : '#f43f5e'}
-                strokeOpacity={0.9}
-                strokeWidth={2}
-              />
+            {showFVG && activeFvgs.map((f, i) => (
+              <ReferenceArea key={i} y1={f.bottom} y2={f.top} fill={f.type === 'bullish' ? '#10b981' : '#f43f5e'} fillOpacity={0.08} />
             ))}
 
-            {showInstitutional && (
+            {showInstitutional && levels && (
               <>
-                <ReferenceLine yAxisId="right" y={levels.asia_high} stroke="#fbbf24" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'ASIA H', position: 'insideRight', fill: '#fbbf24', fontSize: 8, fontWeight: 900 }} />
-                <ReferenceLine yAxisId="right" y={levels.asia_low} stroke="#fbbf24" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'ASIA L', position: 'insideRight', fill: '#fbbf24', fontSize: 8, fontWeight: 900 }} />
-                
-                <ReferenceLine yAxisId="right" y={levels.london_high} stroke="#38bdf8" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'LON H', position: 'insideRight', fill: '#38bdf8', fontSize: 8, fontWeight: 900 }} />
-                <ReferenceLine yAxisId="right" y={levels.london_low} stroke="#38bdf8" strokeWidth={1} strokeDasharray="4 2" strokeOpacity={0.6} label={{ value: 'LON L', position: 'insideRight', fill: '#38bdf8', fontSize: 8, fontWeight: 900 }} />
-
-                <ReferenceLine yAxisId="right" y={levels.overnight_high} stroke="#818cf8" strokeWidth={1} strokeDasharray="6 3" strokeOpacity={0.6} label={{ value: 'ON H', position: 'insideRight', fill: '#818cf8', fontSize: 8, fontWeight: 900 }} />
-                <ReferenceLine yAxisId="right" y={levels.overnight_low} stroke="#818cf8" strokeWidth={1} strokeDasharray="6 3" strokeOpacity={0.6} label={{ value: 'ON L', position: 'insideRight', fill: '#818cf8', fontSize: 8, fontWeight: 900 }} />
+                {levels.asia_high > 0 && <ReferenceLine y={levels.asia_high} stroke="#fbbf24" strokeDasharray="3 3" label={{ value: 'AH', position: 'right', fill: '#fbbf24', fontSize: 10, fontWeight: 900 }} />}
+                {levels.asia_low > 0 && <ReferenceLine y={levels.asia_low} stroke="#fbbf24" strokeDasharray="3 3" label={{ value: 'AL', position: 'right', fill: '#fbbf24', fontSize: 10, fontWeight: 900 }} />}
+                {levels.london_high > 0 && <ReferenceLine y={levels.london_high} stroke="#38bdf8" strokeDasharray="3 3" label={{ value: 'LH', position: 'right', fill: '#38bdf8', fontSize: 10, fontWeight: 900 }} />}
+                {levels.london_low > 0 && <ReferenceLine y={levels.london_low} stroke="#38bdf8" strokeDasharray="3 3" label={{ value: 'LL', position: 'right', fill: '#38bdf8', fontSize: 10, fontWeight: 900 }} />}
+                {levels.overnight_high > 0 && <ReferenceLine y={levels.overnight_high} stroke="#6366f1" strokeDasharray="3 3" label={{ value: 'ONH', position: 'right', fill: '#6366f1', fontSize: 10, fontWeight: 900 }} />}
+                {levels.overnight_low > 0 && <ReferenceLine y={levels.overnight_low} stroke="#6366f1" strokeDasharray="3 3" label={{ value: 'ONL', position: 'right', fill: '#6366f1', fontSize: 10, fontWeight: 900 }} />}
+                {levels.previous_day_high > 0 && <ReferenceLine y={levels.previous_day_high} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PDH', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />}
+                {levels.previous_day_low > 0 && <ReferenceLine y={levels.previous_day_low} stroke="#94a3b8" strokeWidth={1} strokeDasharray="5 5" label={{ value: 'PDL', position: 'right', fill: '#94a3b8', fontSize: 10, fontWeight: 900 }} />}
               </>
             )}
 
             {showIB && (
               <>
-                <Line yAxisId="right" type="stepAfter" dataKey="ibh" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} strokeOpacity={0.8} />
-                <Line yAxisId="right" type="stepAfter" dataKey="ibl" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 5" dot={false} strokeOpacity={0.8} />
+                {/* Initial Balance Lines with Slow Pulse Animation */}
+                <Line 
+                  dataKey="ibh" 
+                  stroke="#f97316" 
+                  strokeWidth={2} 
+                  strokeDasharray="3 3" 
+                  dot={false} 
+                  isAnimationActive={false} 
+                  connectNulls={false} 
+                  className="animate-pulse"
+                  style={{ animationDuration: '3s' }}
+                />
+                <Line 
+                  dataKey="ibl" 
+                  stroke="#f97316" 
+                  strokeWidth={2} 
+                  strokeDasharray="3 3" 
+                  dot={false} 
+                  isAnimationActive={false} 
+                  connectNulls={false}
+                  className="animate-pulse"
+                  style={{ animationDuration: '3s' }}
+                />
+
+                {/* Labels for IB */}
+                {lastIBH !== null && (
+                    <ReferenceLine y={lastIBH} stroke="none" label={{ value: 'IBH', position: 'right', fill: '#f97316', fontSize: 10, fontWeight: 900 }} />
+                )}
+                {lastIBL !== null && (
+                    <ReferenceLine y={lastIBL} stroke="none" label={{ value: 'IBL', position: 'right', fill: '#f97316', fontSize: 10, fontWeight: 900 }} />
+                )}
               </>
             )}
 
-            {showProfile && (
+            {showProfile && profileLevels && (
               <>
-                <ReferenceLine yAxisId="right" y={profileLevels.vah} stroke="#a5b4fc" strokeWidth={2} strokeOpacity={0.8} label={{ value: 'VAH', position: 'insideLeft', fill: '#a5b4fc', fontSize: 9, fontWeight: 900 }} />
-                <ReferenceLine yAxisId="right" y={profileLevels.poc} stroke="#6366f1" strokeWidth={3} strokeOpacity={0.9} label={{ value: 'POC', position: 'insideLeft', fill: '#818cf8', fontSize: 10, fontWeight: 900 }} />
-                <ReferenceLine yAxisId="right" y={profileLevels.val} stroke="#a5b4fc" strokeWidth={2} strokeOpacity={0.8} label={{ value: 'VAL', position: 'insideLeft', fill: '#a5b4fc', fontSize: 9, fontWeight: 900 }} />
+                {profileLevels.vah > 0 && <ReferenceLine y={profileLevels.vah} stroke="#0ea5e9" strokeWidth={1} label={{ value: 'VAH', position: 'right', fill: '#0ea5e9', fontSize: 10, fontWeight: 900 }} />}
+                {profileLevels.poc > 0 && <ReferenceLine y={profileLevels.poc} stroke="#f59e0b" strokeWidth={2} label={{ value: 'POC', position: 'right', fill: '#f59e0b', fontSize: 10, fontWeight: 900 }} />}
+                {profileLevels.val > 0 && <ReferenceLine y={profileLevels.val} stroke="#0ea5e9" strokeWidth={1} label={{ value: 'VAL', position: 'right', fill: '#0ea5e9', fontSize: 10, fontWeight: 900 }} />}
               </>
             )}
 
-            {showVWAP && (
-              <Line yAxisId="right" type="monotone" dataKey="vwap" stroke="#fbbf24" strokeWidth={2} dot={false} strokeDasharray="3 3" strokeOpacity={0.9} />
-            )}
+            {showVWAP && <Line type="monotone" dataKey="vwap" stroke="#f43f5e" strokeWidth={2} dot={false} strokeDasharray="6 2 2 2" isAnimationActive={false} />}
             
             {showEMA && (
-              <>
-                <Line yAxisId="right" type="monotone" dataKey="ema20" stroke="#22d3ee" strokeWidth={1.5} dot={false} strokeOpacity={0.7} />
-                <Line yAxisId="right" type="monotone" dataKey="ema50" stroke="#0ea5e9" strokeWidth={1.5} dot={false} strokeOpacity={0.7} />
-              </>
+               <>
+                  <Line type="monotone" dataKey="ema20" stroke="#06b6d4" strokeWidth={1} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="ema50" stroke="#3b82f6" strokeWidth={1} dot={false} isAnimationActive={false} />
+                  <Line type="monotone" dataKey="ema200" stroke="#8b5cf6" strokeWidth={1} dot={false} isAnimationActive={false} />
+               </>
             )}
 
             {showOHLC && (
-              <Bar yAxisId="right" dataKey={(d: any) => [d.open, d.close]} barSize={6}>
-                {sessionData.map((e, i) => (
-                  <Cell key={`cell-${i}`} fill={(e.close || 0) >= (e.open || 0) ? '#10b981' : '#f43f5e'} fillOpacity={0.8} />
-                ))}
-              </Bar>
-            )}
-
-            <Area 
-              yAxisId="right" 
-              type="stepAfter" 
-              dataKey="dpoc" 
-              stroke="#6366f1" 
-              strokeWidth={3} 
-              fill="url(#colorDpoc)" 
-              dot={false} 
-              isAnimationActive={false}
-              connectNulls={true}
-            />
-
-            {/* Migration History Nodes (The Trace) */}
-            {showMigrationTrace && (
-              <Scatter 
-                yAxisId="right" 
-                name="DPOC Trace" 
-                dataKey="dpoc" 
-                shape={renderCustomScatterDot}
-                isAnimationActive={true}
+              <Bar 
+                 dataKey={(d) => [d.low, d.high]} 
+                 shape={<CandleShape />} 
+                 barSize={8} 
+                 isAnimationActive={false}
               />
             )}
-
-            <ReferenceLine 
-              yAxisId="right" 
-              y={currentPrice} 
-              stroke="#f43f5e" 
-              strokeWidth={3} 
-              label={{ 
-                value: `P: ${currentPrice.toFixed(1)}`, 
-                fill: '#fff', 
-                fontSize: 10, 
-                position: 'insideRight', 
-                fontWeight: '950',
-                backgroundColor: '#f43f5e',
-                padding: 4
-              }} 
-            />
+            
+            {showDPOC && (
+               <>
+                 <Area 
+                   type="stepAfter" 
+                   dataKey="dpoc" 
+                   stroke="#6366f1" 
+                   strokeWidth={3} 
+                   fill="url(#areaGrad)" 
+                   isAnimationActive={false} 
+                   dot={(props) => <PulsingDot {...props} data={data} />}
+                 />
+                 {/* Explicit DPOC Slice Markers */}
+                 <Line 
+                    dataKey="dpoc_marker" 
+                    stroke="none" 
+                    isAnimationActive={false}
+                    dot={<DPOCSliceDot />}
+                    connectNulls={false}
+                 />
+               </>
+            )}
+            
+            <ReferenceLine y={currentPrice} stroke="#f43f5e" strokeWidth={2} label={{ value: currentPrice.toFixed(1), fill: '#f43f5e', fontSize: 12, position: 'right', fontWeight: 900 }} />
+            
+            {/* Zoom Selection Visual */}
+            {selection.isDragging && selection.xLabel1 && selection.xLabel2 && selection.y1 !== null && selection.y2 !== null && (
+               <ReferenceArea 
+                 x1={selection.xLabel1} 
+                 x2={selection.xLabel2} 
+                 y1={selection.y1} 
+                 y2={selection.y2}
+                 stroke="#6366f1"
+                 strokeOpacity={0.8}
+                 strokeDasharray="3 3"
+                 fill="#6366f1" 
+                 fillOpacity={0.15} 
+               />
+            )}
 
             <Brush 
-              dataKey="time" 
-              height={20} 
-              stroke="#334155" 
-              fill="#020617" 
-              travellerWidth={8}
+                dataKey="time" 
+                height={20} 
+                stroke="#4f46e5" 
+                fill="#0f172a" 
+                startIndex={safeBrushRange.start}
+                endIndex={safeBrushRange.end}
+                onChange={(range: any) => {
+                    // Sync Brush changes back to state (e.g. user dragged brush handles)
+                    setBrushRange({ start: range.startIndex, end: range.endIndex });
+                }}
             />
           </ComposedChart>
         </ResponsiveContainer>

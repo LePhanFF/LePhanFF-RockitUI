@@ -1,11 +1,3 @@
-export interface DPOCStep {
-  slice: string;
-  dpoc: number;
-  delta_pts: number;
-  jump: boolean;
-  developing: boolean;
-  bar_count: number;
-}
 
 export interface DPOCSlice {
   time: string;
@@ -18,6 +10,15 @@ export interface DPOCSlice {
   ema20?: number;
   ema50?: number;
   ema200?: number;
+}
+
+export interface DPOCHistoryEntry {
+  slice: string;
+  dpoc: number;
+  delta_pts: number;
+  jump: boolean;
+  developing: boolean;
+  bar_count: number;
 }
 
 export interface FVG {
@@ -87,29 +88,18 @@ export interface MarketSnapshot {
         note?: string;
       };
       dpoc_migration: {
-        dpoc_history?: DPOCStep[];
-        dpoc_slices?: DPOCSlice[];
-        direction?: string;
-        migration_direction?: string;
-        net_migration_pts?: number;
-        steps_since_1030?: number;
-        avg_velocity_per_30min?: number;
-        abs_velocity?: number;
-        relative_retain_percent?: number;
-        accelerating?: boolean;
-        decelerating?: boolean;
-        cluster_range_last_4?: number;
-        is_stabilizing?: boolean;
-        price_vs_dpoc_cluster?: string;
-        reclaiming_opposite?: boolean;
-        prior_exhausted?: boolean;
-        dpoc_regime?: string;
+        dpoc_slices: DPOCSlice[];
+        dpoc_history?: DPOCHistoryEntry[];
+        migration_direction: string;
+        steps_since_1030: number;
         note: string;
       };
+      dpoc_history?: DPOCHistoryEntry[];
       volume_profile: {
         current_session: ProfileSet;
         previous_day: ProfileSet;
         previous_3_days: ProfileSet;
+        note?: string;
       };
       tpo_profile: {
         current_poc: number;
@@ -117,10 +107,10 @@ export interface MarketSnapshot {
         current_val: number;
         single_prints_above_vah: number;
         single_prints_below_val: number;
+        poor_high: number;
+        poor_low: number;
         tpo_shape: string;
         fattening_zone: string;
-        poor_high?: number;
-        poor_low?: number;
         note?: string;
       };
       ninety_min_pd_arrays: {
@@ -157,10 +147,10 @@ export interface MarketSnapshot {
         compression_bias: string;
       };
       price_location: {
-        location_label: string;
         in_upper_third?: boolean;
         in_lower_third?: boolean;
         in_middle?: boolean;
+        location_label: string;
       };
       tpo_signals?: {
         single_prints_above: boolean;
@@ -187,7 +177,7 @@ export interface DecodedOutput {
     timestamp: string;
   };
   bias: string;
-  liquidity_sweeps: Record<string, { status: string; strength: string; level?: string }>;
+  liquidity_sweeps: Record<string, { status: string; strength: string }>;
   value_acceptance: string;
   tpo_read: {
     profile_signals: string;

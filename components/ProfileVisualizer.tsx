@@ -25,114 +25,118 @@ interface ProfileVisualizerProps {
 }
 
 const ProfileVisualizer: React.FC<ProfileVisualizerProps> = ({ tpo, volume, ib, premarket }) => {
-  // We normalize everything relative to the full session range including historical extremes
+  // Hardened data safety to prevent NaN coordinates
+  const safeNum = (v: any) => (typeof v === 'number' && !isNaN(v) ? v : 0);
+
   const min = Math.min(
-    volume.low, 
-    ib.ib_low, 
-    tpo.current_val, 
-    premarket.asia_low, 
-    premarket.london_low, 
-    premarket.previous_day_low
+    safeNum(volume?.low), 
+    safeNum(ib?.ib_low), 
+    safeNum(tpo?.current_val), 
+    safeNum(premarket?.asia_low), 
+    safeNum(premarket?.london_low), 
+    safeNum(premarket?.previous_day_low)
   ) - 40;
   
   const max = Math.max(
-    volume.high, 
-    ib.ib_high, 
-    tpo.current_vah, 
-    premarket.asia_high, 
-    premarket.london_high, 
-    premarket.previous_day_high
+    safeNum(volume?.high), 
+    safeNum(ib?.ib_high), 
+    safeNum(tpo?.current_vah), 
+    safeNum(premarket?.asia_high), 
+    safeNum(premarket?.london_high), 
+    safeNum(premarket?.previous_day_high)
   ) + 40;
   
-  const range = max - min;
+  const range = Math.max(1, max - min);
 
   const getPos = (price: number) => {
-    return ((max - price) / range) * 100;
+    return ((max - safeNum(price)) / range) * 100;
+  };
+
+  const getH = (h: number, l: number) => {
+    return Math.max(2, ((safeNum(h) - safeNum(l)) / range) * 100);
   };
 
   return (
-    <div className="relative h-[350px] bg-slate-950/40 rounded-xl overflow-hidden border border-slate-800/60 shadow-inner group">
-      {/* Grid Lines */}
-      {[0.2, 0.4, 0.6, 0.8].map(p => (
+    <div className="relative h-full min-h-[400px] bg-slate-950/60 rounded-[2rem] overflow-hidden border border-slate-800/80 shadow-2xl group p-4">
+      {/* Dynamic Grid */}
+      {[0.1, 0.25, 0.5, 0.75, 0.9].map(p => (
         <div 
           key={p} 
-          className="absolute w-full border-t border-slate-800/20" 
+          className="absolute w-full border-t border-slate-800/30 left-0" 
           style={{ top: `${p * 100}%` }}
         />
       ))}
 
-      {/* Historical Side Ticks (Left Side) */}
-      <div className="absolute left-0.5 h-full w-4 flex flex-col justify-between py-1 z-0 opacity-40 group-hover:opacity-100 transition-opacity">
-        <div className="absolute w-full h-px bg-slate-400" style={{ top: `${getPos(premarket.previous_day_high)}%` }} />
-        <div className="absolute w-full h-px bg-slate-400" style={{ top: `${getPos(premarket.previous_day_low)}%` }} />
+      {/* Extreme Historical Ticks (Left) */}
+      <div className="absolute left-1 h-full w-4 flex flex-col justify-between py-2 z-0 opacity-40 group-hover:opacity-100 transition-opacity">
+        <div className="absolute w-full h-0.5 bg-slate-600 rounded-full" style={{ top: `${getPos(premarket.previous_day_high)}%` }} />
+        <div className="absolute w-full h-0.5 bg-slate-600 rounded-full" style={{ top: `${getPos(premarket.previous_day_low)}%` }} />
       </div>
 
-      {/* Asia/London Markers (Right Side) */}
-      <div className="absolute right-0.5 h-full w-4 z-0 opacity-30 group-hover:opacity-100 transition-opacity">
-        <div className="absolute w-full h-px bg-amber-500" style={{ top: `${getPos(premarket.asia_high)}%` }} />
-        <div className="absolute w-full h-px bg-amber-500" style={{ top: `${getPos(premarket.asia_low)}%` }} />
-        <div className="absolute w-full h-px bg-sky-400" style={{ top: `${getPos(premarket.london_high)}%` }} />
-        <div className="absolute w-full h-px bg-sky-400" style={{ top: `${getPos(premarket.london_low)}%` }} />
+      {/* Globex Ticks (Right) */}
+      <div className="absolute right-1 h-full w-4 z-0 opacity-40 group-hover:opacity-100 transition-opacity">
+        <div className="absolute w-full h-0.5 bg-amber-500/60 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]" style={{ top: `${getPos(premarket.asia_high)}%` }} />
+        <div className="absolute w-full h-0.5 bg-amber-500/60 rounded-full shadow-[0_0_8px_rgba(245,158,11,0.5)]" style={{ top: `${getPos(premarket.asia_low)}%` }} />
+        <div className="absolute w-full h-0.5 bg-sky-400/60 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.5)]" style={{ top: `${getPos(premarket.london_high)}%` }} />
+        <div className="absolute w-full h-0.5 bg-sky-400/60 rounded-full shadow-[0_0_8px_rgba(56,189,248,0.5)]" style={{ top: `${getPos(premarket.london_low)}%` }} />
       </div>
 
-      {/* IB Range Band */}
+      {/* IB Band */}
       <div 
-        className="absolute left-1 w-2 bg-amber-500/10 border-r border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.05)]"
+        className="absolute left-6 w-3 bg-amber-500/10 border-x border-amber-500/40 rounded-full"
         style={{ 
           top: `${getPos(ib.ib_high)}%`, 
-          height: `${Math.max(2, ((ib.ib_high - ib.ib_low) / range) * 100)}%` 
+          height: `${getH(ib.ib_high, ib.ib_low)}%` 
         }}
       />
 
-      {/* Volume Value Area (VA) */}
+      {/* Volume VA Column */}
       <div 
-        className="absolute left-6 w-14 bg-indigo-500/10 border-x border-indigo-500/20 flex flex-col justify-between"
+        className="absolute left-1/4 w-24 bg-indigo-500/10 border-x border-indigo-500/30 rounded-3xl"
         style={{ 
           top: `${getPos(volume.vah)}%`, 
-          height: `${Math.max(2, ((volume.vah - volume.val) / range) * 100)}%` 
+          height: `${getH(volume.vah, volume.val)}%` 
         }}
       >
-        <div className="w-full h-px bg-indigo-500/20"></div>
-        <div className="w-full h-px bg-indigo-500/20"></div>
+        <div className="absolute w-full h-px bg-indigo-500/20 top-1/2" />
       </div>
 
-      {/* Volume POC */}
+      {/* Volume POC Neon */}
       <div 
-        className="absolute left-4 w-18 h-0.5 bg-indigo-400 shadow-[0_0_12px_rgba(129,140,248,0.7)] z-10"
+        className="absolute left-[15%] w-[35%] h-1 bg-indigo-400 shadow-[0_0_20px_rgba(129,140,248,1)] z-10 rounded-full"
         style={{ top: `${getPos(volume.poc)}%` }}
       />
 
-      {/* TPO VA Band */}
+      {/* TPO VA Column */}
       <div 
-        className="absolute right-6 w-14 bg-slate-500/5 border-x border-slate-600/20"
+        className="absolute right-1/4 w-24 bg-slate-400/5 border-x border-slate-700/20 rounded-3xl"
         style={{ 
           top: `${getPos(tpo.current_vah)}%`, 
-          height: `${Math.max(2, ((tpo.current_vah - tpo.current_val) / range) * 100)}%` 
+          height: `${getH(tpo.current_vah, tpo.current_val)}%` 
         }}
       />
 
-      {/* TPO POC */}
+      {/* TPO POC Marker */}
       <div 
-        className="absolute right-4 w-18 h-px bg-slate-400/60 z-10"
+        className="absolute right-[15%] w-[35%] h-1 bg-slate-500/60 z-10 rounded-full border border-slate-400/20"
         style={{ top: `${getPos(tpo.current_poc)}%` }}
       />
 
-      {/* Current Price Marker */}
+      {/* Real-time Price Engine Marker */}
       <div 
         className="absolute left-0 w-full flex items-center z-20 pointer-events-none"
         style={{ top: `${getPos(ib.current_close)}%` }}
       >
-        <div className="h-px flex-1 bg-rose-500/40"></div>
-        <div className="bg-rose-500 text-[8px] font-black px-1.5 py-0.5 rounded shadow-lg text-white border border-rose-400/20">
-          {ib.current_close.toFixed(1)}
+        <div className="h-px flex-1 bg-rose-500/50 shadow-[0_0_10px_rgba(244,63,94,0.5)]"></div>
+        <div className="bg-rose-600 text-[10px] font-black px-3 py-1.5 rounded-xl shadow-2xl text-white border border-rose-400/30 transform -translate-y-1/2">
+          LIVE: {safeNum(ib.current_close).toFixed(1)}
         </div>
       </div>
 
-      {/* Vertical Labels */}
-      <div className="absolute top-2 left-3 text-[8px] font-black text-slate-700 uppercase tracking-widest">Market Profile</div>
-      <div className="absolute bottom-2 left-3 text-[8px] font-black text-amber-500/60 uppercase">IB</div>
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[8px] font-black text-indigo-500/60 uppercase">Vol VA</div>
-      <div className="absolute bottom-2 right-3 text-[8px] font-black text-slate-500/60 uppercase">TPO VA</div>
+      {/* Semantic Labels */}
+      <div className="absolute top-6 left-8 text-[10px] font-black text-slate-700 uppercase tracking-[0.4em] italic">Market_Structure_Visualizer</div>
+      <div className="absolute bottom-6 left-1/4 -translate-x-1/2 text-[9px] font-black text-indigo-500/80 uppercase tracking-widest bg-indigo-500/5 px-2 py-1 rounded-lg">Vol VA</div>
+      <div className="absolute bottom-6 right-1/4 translate-x-1/2 text-[9px] font-black text-slate-500/80 uppercase tracking-widest bg-slate-500/5 px-2 py-1 rounded-lg">TPO VA</div>
     </div>
   );
 };

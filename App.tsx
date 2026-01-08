@@ -2,367 +2,182 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
-import { GoogleGenAI } from "@google/genai";
-import {
-  Clock,
-  LayoutDashboard,
-  Database,
-  RefreshCw,
+import { 
+  Clock, 
+  LayoutDashboard, 
+  Cloud, 
+  RefreshCw, 
   Timer,
-  BrainCircuit,
-  Sparkles,
-  Wifi,
-  WifiOff,
-  Activity,
-  Zap,
-  Calendar,
-  Layers,
-  FileJson,
-  Cpu,
+  Server,
   AlertCircle,
-  ShieldAlert,
-  PlayCircle
+  Cpu,
+  FileText,
+  Loader2,
+  TerminalSquare,
+  Activity,
+  Network
 } from 'lucide-react';
 
-// Google Cloud Storage configuration
-const GCS_BUCKET = "rockit-data";
-const GCS_BASE_URL = "https://storage.googleapis.com/storage/v1/b";
-const REFRESH_INTERVAL_SEC = 120;
-
-// GCS Configuration
-// Note: For production use, implement proper authentication via a backend service
-// This implementation assumes public read access to the bucket or uses a proxy
-const getGCSAuthHeaders = async (): Promise<Record<string, string>> => {
-  // For public buckets, return empty headers
-  // For authenticated access, implement JWT signing in a backend service
-  return {};
-};
+// Public GCS Bucket
+const GCS_BUCKET_BASE = "https://storage.googleapis.com/rockit-data"; 
+const REFRESH_INTERVAL_SEC = 30; 
 
 const hardenedClean = (raw: string): string => {
+  if (!raw) return "";
   let text = raw.trim();
   text = text.replace(/```json/gi, "").replace(/```/g, "");
-  text = text.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, ""); // Remove thinking tags for JSON parse
   
-  let firstBrace = text.indexOf('{');
-  let lastBrace = text.lastIndexOf('}');
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
   if (firstBrace === -1 || lastBrace === -1) return text;
   text = text.substring(firstBrace, lastBrace + 1);
-
-  text = text.replace(/([^\\])"(?![ \n\t]*[:,\}\]])/g, '$1\\"');
-  text = text.replace(/\n/g, " ");
-  text = text.replace(/[\x00-\x1F\x7F-\x9F]/g, "");
-  text = text.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]");
-
-  return text.trim();
+  return text.replace(/\n/g, " ").trim();
 };
 
 const salvageIntel = (raw: string): Partial<DecodedOutput> => {
-  const salvaged: any = {};
+  const salvaged: any = {
+    bias: "NEUTRAL",
+    confidence: "0%",
+    one_liner: "Decoding market stream...",
+    day_type_reasoning: []
+  };
   
-  const dayTypeMatch = raw.match(/"(?:day_type|type|market_type)"\s*[:=]\s*(?:\{\s*"type"\s*:\s*)?"(.*?)"/i);
-  if (dayTypeMatch) salvaged.day_type = { type: dayTypeMatch[1].trim() };
-
-  const reasoningRegex = /"(?:day_type_reasoning|evidence|reasoning|logic_points|points|strategic_reasoning|analysis_points)"\s*[:=]\s*\[([\s\S]*?)\]/i;
-  const rMatch = raw.match(reasoningRegex);
-  if (rMatch) {
-    const lines = rMatch[1].match(/"(.*?)"(?=\s*[,\]])/g);
-    if (lines) {
-      salvaged.day_type_reasoning = lines.map(l => l.replace(/^"|"$/g, '').trim());
+  try {
+    const biasMatch = raw.match(/"bias"\s*:\s*"(.*?)"/i);
+    if (biasMatch) salvaged.bias = biasMatch[1].trim().toUpperCase();
+    const narrativeMatch = raw.match(/"(?:one_liner|narrative|summary)"\s*:\s*"(.*?)"/i);
+    if (narrativeMatch) salvaged.one_liner = narrativeMatch[1].trim();
+    const reasonMatch = raw.match(/"(?:day_type_reasoning|evidence|reasoning)"\s*:\s*\[([\s\S]*?)\]/i);
+    if (reasonMatch) {
+      const items = reasonMatch[1].match(/"(.*?)"/g);
+      if (items) salvaged.day_type_reasoning = items.map(i => i.replace(/"/g, ''));
     }
+    const confMatch = raw.match(/"confidence"\s*:\s*"(.*?)"/i);
+    if (confMatch) salvaged.confidence = confMatch[1].trim();
+  } catch (e) {
+    console.warn("Salvage failed");
   }
-
-  const oneLinerRegex = /"(?:one_liner|narrative|market_narrative|summary|conclusion)"\s*[:=]\s*"(.*?)"(?=\s*[,}])/i;
-  const oMatch = raw.match(oneLinerRegex);
-  if (oMatch) salvaged.one_liner = oMatch[1].trim();
-
-  const biasMatch = raw.match(/"bias"\s*:\s*"(.*?)"/i);
-  if (biasMatch) salvaged.bias = biasMatch[1].trim().toUpperCase();
-
-  const confMatch = raw.match(/"confidence"\s*:\s*"(.*?)"/i);
-  if (confMatch) salvaged.confidence = confMatch[1].trim();
-
-  const vaMatch = raw.match(/"value_acceptance"\s*:\s*"(.*?)"/i);
-  if (vaMatch) salvaged.value_acceptance = vaMatch[1].trim();
-
-  const sweepsMatch = raw.match(/"liquidity_sweeps"\s*:\s*(\{[\s\S]*?\})/i);
-  if (sweepsMatch) {
-    try {
-      salvaged.liquidity_sweeps = JSON.parse(hardenedClean(sweepsMatch[1]));
-    } catch (e) {
-      const sessions = ["asia", "london", "overnight", "previous_day", "previous_week", "ib"];
-      const sweeps: any = {};
-      sessions.forEach(s => {
-        const sMatch = raw.match(new RegExp(`"${s}"\\s*:\\s*\\{\\s*(?:"level"\\s*:\\s*"(.*?)",?\\s*)?"status"\\s*:\\s*"(.*?)",?\\s*"strength"\\s*:\\s*"(.*?)"`, "i"));
-        if (sMatch) {
-          if (sMatch[1]) {
-            sweeps[s] = { level: sMatch[1], status: sMatch[2], strength: sMatch[3] };
-          } else {
-            sweeps[s] = { status: sMatch[2], strength: sMatch[3] };
-          }
-        }
-      });
-      if (Object.keys(sweeps).length > 0) salvaged.liquidity_sweeps = sweeps;
-    }
-  }
-
-  const tpoRead: any = {};
-  const sigMatch = raw.match(/"profile_signals"\s*:\s*"(.*?)"/i);
-  if (sigMatch) tpoRead.profile_signals = sigMatch[1].trim();
-  const migMatch = raw.match(/"dpoc_migration"\s*:\s*"(.*?)"/i);
-  if (sigMatch) tpoRead.dpoc_migration = migMatch[1].trim();
-  const extMatch = raw.match(/"extreme_or_compression"\s*:\s*"(.*?)"/i);
-  if (extMatch) tpoRead.extreme_or_compression = extMatch[1].trim();
-  if (Object.keys(tpoRead).length > 0) salvaged.tpo_read = tpoRead;
-
   return salvaged;
 };
 
 const App: React.FC = () => {
-  // Persistence initialization
-  const savedFiles = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem('rockit_available_files') || '[]');
-    } catch { return []; }
-  }, []);
-
   const [snapshots, setSnapshots] = useState<any[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(() => {
-    return parseInt(localStorage.getItem('rockit_selected_index') || '0');
-  });
-  const [availableFiles, setAvailableFiles] = useState<string[]>(savedFiles);
-  const [selectedFile, setSelectedFile] = useState<string | null>(() => {
-    return localStorage.getItem('rockit_selected_file');
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAuditing, setIsAuditing] = useState(false);
-  const [aiAudit, setAiAudit] = useState<{ summary: string; shifts: string[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isRateLimited, setIsRateLimited] = useState(false);
-  const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SEC);
-  const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'loading'>('loading');
-  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [availableFiles, setAvailableFiles] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<string | null>(null);
   
-  const slicesEndRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isListLoading, setIsListLoading] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'error' | 'connecting'>('connecting');
+  const [countdown, setCountdown] = useState(REFRESH_INTERVAL_SEC);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  
+  const [logs, setLogs] = useState<string[]>([]);
+  const [lastFetchUrl, setLastFetchUrl] = useState<string>("");
+  const [lastFetchStatus, setLastFetchStatus] = useState<string>("");
+
   const autoScrollEnabled = useRef(true);
 
-  // Persistence side effects
-  useEffect(() => {
-    if (availableFiles.length > 0 && !isDemoMode) {
-      localStorage.setItem('rockit_available_files', JSON.stringify(availableFiles));
-    }
-  }, [availableFiles, isDemoMode]);
-
-  useEffect(() => {
-    if (selectedFile && !isDemoMode) localStorage.setItem('rockit_selected_file', selectedFile);
-  }, [selectedFile, isDemoMode]);
-
-  useEffect(() => {
-    if (!isDemoMode) localStorage.setItem('rockit_selected_index', selectedIndex.toString());
-  }, [selectedIndex, isDemoMode]);
-
-  const fetchFileList = async (isAutoRefresh = false) => {
-    if (!isAutoRefresh) setIsLoading(true);
-    try {
-      const headers = await getGCSAuthHeaders();
-      const res = await fetch(`${GCS_BASE_URL}/${GCS_BUCKET}/o?prefix=local-analysis-format/`, {
-        headers
-      });
-
-      if (!res.ok) throw new Error(`GCS connection failed: ${res.statusText}`);
-
-      const data = await res.json();
-      const files = data.items
-        .filter((item: any) => item.name.endsWith('.json') || item.name.endsWith('.jsonl'))
-        .map((item: any) => item.name.replace('local-analysis-format/', ''))
-        .sort((a: string, b: string) => b.localeCompare(a));
-
-      setAvailableFiles(files);
-      setConnectionStatus('online');
-      setIsRateLimited(false);
-      setError(null);
-
-      if (files.length > 0 && !isDemoMode) {
-        if (!selectedFile || !files.includes(selectedFile)) {
-          handleFileSelect(files[0], false);
-        } else {
-          handleFileSelect(selectedFile, true);
-        }
-      }
-    } catch (err: any) {
-      console.warn("GCS Fetch Error:", err.message);
-      setError(err.message);
-      setConnectionStatus('offline');
-
-      if (selectedFile && !isDemoMode) {
-        handleFileSelect(selectedFile, true);
-      } else if (snapshots.length === 0 && !isDemoMode && availableFiles.length === 0) {
-        // Only load mock as fallback if absolutely no cache exists
-        loadDemoMode();
-      }
-    } finally {
-      if (!isAutoRefresh) setIsLoading(false);
-    }
+  const addLog = (msg: string) => {
+    console.log(`[ROCKIT] ${msg}`);
+    setLogs(prev => [`> ${msg}`, ...prev].slice(0, 10));
   };
 
-  const loadDemoMode = () => {
-    setIsDemoMode(true);
-    setSelectedFile("DEMO_2025_MOCK.json");
-    setAvailableFiles(["DEMO_2025_MOCK.json"]);
+  const fetchFileList = async (isAutoRefresh = false) => {
+    if (!isAutoRefresh) setIsListLoading(true);
+    setErrorMsg(null);
+    
+    const listUrl = GCS_BUCKET_BASE;
+    setLastFetchUrl(listUrl);
+    setLastFetchStatus("Pending...");
+    if (!isAutoRefresh) addLog(`Fetching Bucket: ${listUrl}`);
 
-    // Create a simple demo snapshot
-    const demoSnapshot = {
-      input: {
-        session_date: "2025-12-31",
-        current_et_time: "09:30",
-        premarket: {
-          asia_high: 25658.25,
-          asia_low: 25576.5,
-          london_high: 25603.5,
-          london_low: 25552.5,
-          london_range: 51.0,
-          overnight_high: 25716.75,
-          overnight_low: 25561.0,
-          overnight_range: 155.75,
-          previous_day_high: 25793.75,
-          previous_day_low: 25668.25,
-          previous_week_high: 25935.25,
-          previous_week_low: 25608.25,
-          compression_flag: true,
-          compression_ratio: 0.327,
-          smt_preopen: "neutral"
-        },
-        intraday: {
-          ib: {
-            ib_status: "complete",
-            ib_high: 25698.75,
-            ib_low: 25678.5,
-            ib_range: 20.25,
-            ib_mid: 25688.62,
-            price_vs_ib: "lower_third_hug",
-            price_vs_vwap: "above",
-            current_close: 25678.5,
-            current_open: 25695.0,
-            current_high: 25698.75,
-            current_low: 25678.5,
-            current_volume: 1906,
-            current_vwap: 25628.26,
-            ema20: 25670.64,
-            ema50: 25639.24,
-            ema200: 25632.04,
-            rsi14: 60.8,
-            atr14: 12.18
-          },
-          wick_parade: {
-            bullish_wick_parade_count: 7,
-            bearish_wick_parade_count: 6
-          },
-          dpoc_migration: {
-            dpoc_slices: [{"time": "09:30", "dpoc": 25678.5}],
-            migration_direction: "up",
-            steps_since_1030: 77.0,
-            note: "DPOC migration = final arbiter for bias (Universal Oath)"
-          },
-          volume_profile: {
-            current_session: {
-              poc: 25678.25,
-              vah: 25678.25,
-              val: 25678.25,
-              high: 25698.75,
-              low: 25678.5,
-              hvn_nodes: [25678.25],
-              lvn_nodes: [25678.5, 25678.75, 25679.0]
-            },
-            previous_day: {
-              poc: 25720.25,
-              vah: 25782.0,
-              val: 25672.0,
-              high: 25793.75,
-              low: 25668.25,
-              hvn_nodes: [25720.25, 25691.0, 25736.25],
-              lvn_nodes: [25668.0, 25668.25, 25668.5]
-            },
-            previous_3_days: {
-              poc: 25720.25,
-              vah: 25929.5,
-              val: 25658.5,
-              high: 25935.25,
-              low: 25648.0,
-              hvn_nodes: [25720.25, 25796.25, 25695.25],
-              lvn_nodes: [25647.75, 25648.0, 25648.25]
-            }
-          },
-          tpo_profile: {
-            current_poc: 25678.5,
-            current_vah: 25698.5,
-            current_val: 25678.5,
-            single_prints_above_vah: 1,
-            single_prints_below_val: 0,
-            fattening_zone: "below_val",
-            tpo_shape: "b_shape"
-          },
-          ninety_min_pd_arrays: {
-            ninety_min_high: 25698.75,
-            ninety_min_low: 25678.5,
-            equilibrium_50: 25688.62,
-            current_in_discount: 1,
-            current_in_premium: 0,
-            expansion_status: "inside",
-            bias_potential: "bullish"
-          },
-          fvg_detection: {
-            daily_fvg: [],
-            "4h_fvg": [],
-            "1h_fvg": [{"type": "bullish", "top": 25678.5, "bottom": 25632.0, "time": "2025-12-31 09:00"}],
-            "90min_fvg": [],
-            "15min_fvg": [],
-            "5min_fvg": []
-          }
-        },
-        core_confluences: {
-          ib_acceptance: {
-            close_above_ibh: false,
-            close_below_ibl: false,
-            price_accepted_higher: "No",
-            price_accepted_lower: "No"
-          },
-          dpoc_compression: {
-            compressing_against_vah: true,
-            compressing_against_val: true,
-            compression_bias: "aggressive_bullish"
-          },
-          price_location: {
-            location_label: "lower_third_hug"
-          }
+    try {
+      const res = await fetch(listUrl);
+      setLastFetchStatus(`${res.status} ${res.statusText}`);
+      
+      if (!res.ok) {
+        throw new Error(`Bucket Access Failed: ${res.status} ${res.statusText}`);
+      }
+
+      const text = await res.text();
+      
+      if (text.trim().startsWith("<!DOCTYPE html") || text.includes("<html")) {
+        addLog("WARN: Response appears to be HTML (Auth/UI page?)");
+      }
+
+      const files: string[] = [];
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(text, "text/xml");
+      const contents = xmlDoc.getElementsByTagName("Contents");
+      
+      for (let i = 0; i < contents.length; i++) {
+        const key = contents[i].getElementsByTagName("Key")[0]?.textContent;
+        if (key && (key.endsWith('.json') || key.endsWith('.jsonl')) && !key.endsWith('/')) {
+           files.push(key);
         }
-      },
-      output: `{"day_type": {"type": "Trend Up", "timestamp": "2025-12-31 / 09:30"}, "bias": "LONG", "liquidity_sweeps": {"asia": {"status": "Held", "strength": "None"}, "ib": {"status": "Reclaimed", "strength": "Engulfed"}}, "value_acceptance": "VA [skewed up] | POC location [mid] | Acceptance above VAH", "tpo_read": {"profile_signals": "Upper fattening", "dpoc_migration": "DPOC migration [up] X 77.0 pts", "extreme_or_compression": "extreme bullish shift"}, "confidence": "93%", "day_type_reasoning": ["IB complete with upper hug", "DPOC migrated 77 points upper", "Lack of bearish signals"], "one_liner": "IB upper reclaim + DPOC upper migration = aggressive bullish trend"}`
-    };
+      }
 
-    setSnapshots([demoSnapshot]);
-    setSelectedIndex(0);
+      files.sort().reverse();
+      
+      if (files.length === 0) {
+        if (contents.length === 0 && (text.includes("<html") || text.includes("<!DOCTYPE"))) {
+           throw new Error("Received HTML instead of XML bucket listing.");
+        }
+        throw new Error("No .json/.jsonl files found in bucket.");
+      }
+
+      setAvailableFiles(files);
+      setConnectionStatus('connected');
+      
+      if (!selectedFile && files.length > 0) {
+        handleFileSelect(files[0], true);
+      }
+
+    } catch (err: any) {
+      if (!isAutoRefresh) addLog(`ERROR: ${err.message}`);
+      
+      let displayMsg = err.message || "Failed to list bucket contents";
+      if (displayMsg === "Failed to fetch") {
+        displayMsg = "CORS/Network Error. Bucket likely blocks this origin.";
+      }
+
+      setConnectionStatus('error');
+      setErrorMsg(displayMsg);
+    } finally {
+      if (!isAutoRefresh) setIsListLoading(false);
+    }
   };
 
   const handleFileSelect = async (fileName: string, isUpdate = false) => {
-    if (fileName === "DEMO_2025_MOCK.json") {
-       loadDemoMode();
-       return;
-    }
-
-    setIsDemoMode(false);
     setSelectedFile(fileName);
-    if (!isUpdate) {
-      setIsLoading(true);
-      setAiAudit(null);
-    }
+    setIsLoading(true);
+    
+    const cleanBase = GCS_BUCKET_BASE.replace(/\/$/, '');
+    const fileUrl = `${cleanBase}/${fileName}`;
+    // Cache bust
+    const fetchUrl = `${fileUrl}?cb=${Date.now()}`;
+
+    setLastFetchUrl(fetchUrl);
+    setLastFetchStatus("Pending...");
+    addLog(`Fetching Data: ${fileName}`);
+    
     try {
-      const headers = await getGCSAuthHeaders();
-      const objectName = `local-analysis-format/${fileName}`;
-      const res = await fetch(`https://storage.googleapis.com/${GCS_BUCKET}/${objectName}`, {
-        headers
-      });
-      if (!res.ok) throw new Error("GCS data stream interrupted");
+      const res = await fetch(fetchUrl);
+      setLastFetchStatus(`${res.status} ${res.statusText}`);
+      
+      if (!res.ok) throw new Error(`File Fetch Error: ${res.status}`);
+      
       const text = await res.text();
+      addLog(`Payload: ${text.length} bytes`);
+
+      if (text.trim().startsWith("<!DOCTYPE html") || text.includes("<html")) {
+        throw new Error("Received HTML content instead of JSON.");
+      }
+
       let newSnapshots: any[] = [];
+      
       if (fileName.endsWith('.jsonl')) {
         newSnapshots = text.trim().split('\n').map(line => {
           try { return JSON.parse(line); } catch (e) { return null; }
@@ -371,38 +186,23 @@ const App: React.FC = () => {
         const data = JSON.parse(text);
         newSnapshots = Array.isArray(data) ? data : [data];
       }
-      setSnapshots(newSnapshots);
+      
+      addLog(`Records Parsed: ${newSnapshots.length}`);
 
-      if (!isUpdate) {
-        setSelectedIndex(newSnapshots.length - 1);
-      } else if (selectedIndex >= newSnapshots.length) {
-        setSelectedIndex(newSnapshots.length - 1);
+      if (newSnapshots.length > 0) {
+        setSnapshots(newSnapshots);
+        if (isUpdate || autoScrollEnabled.current) {
+          setSelectedIndex(newSnapshots.length - 1);
+        }
+        setErrorMsg(null);
+      } else {
+        setErrorMsg("Selected file is empty");
       }
     } catch (err: any) {
-      console.error("GCS Stream Error:", err.message);
-      if (!isUpdate) setError(`GCS Stream Error: ${err.message}`);
+      addLog(`Stream Error: ${err.message}`);
+      setErrorMsg(`Failed to load: ${err.message}`);
     } finally {
-      if (!isUpdate) setIsLoading(false);
-    }
-  };
-
-  const runAiAudit = async () => {
-    if (!snapshots.length) return;
-    setIsAuditing(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: (import.meta as any).env.VITE_GEMINI_API_KEY || '' });
-      const history = processedSnapshots.map(s => ({ t: s.input.current_et_time, b: s.decoded?.bias, d: s.decoded?.day_type?.type }));
-      const prompt = `Review market evolution: ${JSON.stringify(history)}. Summarize shifts. Return JSON: {"summary": string, "shifts": string[]}`;
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: { responseMimeType: "application/json" }
-      });
-      setAiAudit(JSON.parse(response.text || '{}'));
-    } catch (err) {
-      setAiAudit({ summary: "Audit failed.", shifts: [] });
-    } finally {
-      setIsAuditing(false);
+      setIsLoading(false);
     }
   };
 
@@ -421,316 +221,224 @@ const App: React.FC = () => {
   }, []);
 
   const processedSnapshots = useMemo(() => {
-    return (snapshots || []).map(s => {
+    return snapshots.map(s => {
       let decoded: DecodedOutput | null = null;
-      let thinking = '';
-      const rawText = (typeof s.output === 'string' ? s.output : s.llm_output) || '';
+      const rawOutput = s.output || s.llm_output || '';
+      const rawText = (typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput)) || '';
+      
+      // Extract thinking content *before* cleaning
+      const thinkMatch = rawText.match(/<think>([\s\S]*?)<\/think>/i);
+      const extractedThinking = thinkMatch ? thinkMatch[1].trim() : null;
+
       try {
-        const tMatch = rawText.match(/<think>([\s\S]*?)<\/think>/i);
-        if (tMatch) thinking = tMatch[1].trim();
         const cleanedText = hardenedClean(rawText);
-        try {
-          decoded = JSON.parse(cleanedText);
-        } catch (parseError) {
-          const salvaged = salvageIntel(rawText);
-          if (salvaged.day_type_reasoning || salvaged.one_liner || salvaged.day_type || salvaged.liquidity_sweeps) {
-            decoded = salvaged as DecodedOutput;
-          }
+        decoded = JSON.parse(cleanedText);
+      } catch (e) {
+        decoded = salvageIntel(rawText) as DecodedOutput;
+      }
+
+      // Re-attach thinking if it was found but missing in JSON
+      if (decoded && extractedThinking && !decoded.thinking) {
+        decoded.thinking = extractedThinking;
+      }
+
+      const input = {
+        session_date: s.input?.session_date || 'N/A',
+        current_et_time: s.input?.current_et_time || 'N/A',
+        premarket: { 
+          asia_high: 0, asia_low: 0, london_high: 0, london_low: 0, 
+          overnight_high: 0, overnight_low: 0, previous_day_high: 0, 
+          previous_day_low: 0, ...s.input?.premarket 
+        },
+        intraday: {
+          ib: { current_close: 0, current_vwap: 0, ib_high: 0, ib_low: 0, current_open: 0, current_high: 0, current_low: 0, ema20: 0, ema50: 0, ...s.input?.intraday?.ib },
+          volume_profile: { current_session: { poc: 0, vah: 0, val: 0, high: 0, low: 0 }, ...s.input?.intraday?.volume_profile },
+          tpo_profile: { current_poc: 0, current_vah: 0, current_val: 0, tpo_shape: 'N/A', fattening_zone: 'N/A', ...s.input?.intraday?.tpo_profile },
+          dpoc_migration: { dpoc_slices: [], migration_direction: 'STABLE', ...s.input?.intraday?.dpoc_migration },
+          fvg_detection: { "1h_fvg": [], "15min_fvg": [], "5min_fvg": [], ...s.input?.intraday?.fvg_detection }
+        },
+        core_confluences: {
+          ib_acceptance: { close_above_ibh: false, close_below_ibl: false },
+          ...s.input?.core_confluences
         }
-      } catch (e) { console.warn("Extraction failed for " + s.input?.current_et_time); }
-
-      const input = s.input || {
-        session_date: s.session_date || 'N/A',
-        current_et_time: s.current_et_time || 'N/A',
-        premarket: s.premarket || {},
-        intraday: s.intraday || { ib: { current_close: s.current_close || 0 } },
-        core_confluences: s.core_confluences || {}
       };
-
-      return { 
-        ...s, 
-        input, 
-        decoded: decoded ? { ...decoded, thinking: thinking || decoded.thinking } : null,
-        thinking: thinking || (typeof s.output === 'string' ? s.output : '') 
-      } as MarketSnapshot & { decoded: DecodedOutput | null, thinking?: string };
+      return { ...s, input, decoded };
     });
   }, [snapshots]);
 
-  const slicesByHour = useMemo(() => {
-    const groups: Record<string, { idx: number; s: any }[]> = {};
-    processedSnapshots.forEach((s, idx) => {
-      const time = s.input?.current_et_time || '00:00';
-      const hour = time.split(':')[0] + ':00';
-      if (!groups[hour]) groups[hour] = [];
-      groups[hour].push({ idx, s });
-    });
-    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [processedSnapshots]);
-
   const currentSnapshot = processedSnapshots[selectedIndex] || null;
-  const decodedOutput = currentSnapshot?.decoded || null;
-
-  const reasoningPoints = useMemo(() => {
-    const points = decodedOutput?.day_type_reasoning || [];
-    if (points.length === 0) return ["Synchronizing core intelligence stream..."];
-    return [...points, ...points];
-  }, [decodedOutput]);
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 overflow-hidden text-slate-200 font-sans">
-      <header className="shrink-0 z-[60] bg-slate-900/95 backdrop-blur-2xl border-b border-slate-800/60 px-6 py-5 flex items-center shadow-2xl relative">
-        <div className="flex items-center gap-5 shrink-0 mr-8">
-          <div className="p-3 bg-indigo-600 rounded-xl shadow-xl border border-indigo-400/20">
-            <LayoutDashboard className="w-7 h-7 text-white" />
+    <div className="h-screen w-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden font-sans select-none antialiased relative">
+      {/* Header */}
+      <header className="shrink-0 bg-slate-900/95 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-2xl backdrop-blur-xl z-[100]">
+        <div className="flex items-center gap-5">
+          <div className="p-2.5 bg-indigo-600 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] border border-indigo-400/20">
+            <LayoutDashboard className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-black tracking-tight text-white uppercase italic leading-none">ROCKIT <span className="text-indigo-400 not-italic">ENGINE</span></h1>
-            <div className="flex items-center gap-4 mt-2">
-              <p className="text-xs text-slate-500 font-black uppercase tracking-[0.2em]">v7.8</p>
-              <div className="flex items-center gap-5">
-                <div className={`flex items-center gap-2 px-2.5 py-1 rounded text-[10px] font-black border transition-colors ${
-                  connectionStatus === 'online' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                }`}>
-                  {connectionStatus === 'online' ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
-                  {connectionStatus.toUpperCase()}
-                </div>
-                <div className="flex items-center gap-2 px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded text-[10px] font-black text-indigo-400">
-                  <Timer className="w-3 h-3" />
-                  {isRateLimited ? "WAITING..." : `RE-POLL: ${countdown}s`}
-                </div>
+            <h1 className="text-xl font-black tracking-tighter text-white uppercase italic leading-none">ROCKIT <span className="text-indigo-400 not-italic">ENGINE</span></h1>
+            <div className="flex items-center gap-3 mt-1.5">
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 border rounded text-[8px] font-black uppercase tracking-[0.2em] ${
+                connectionStatus === 'connected' ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-400' : 
+                connectionStatus === 'error' ? 'bg-rose-500/20 border-rose-500/30 text-rose-400' :
+                'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              }`}>
+                <Server className="w-2.5 h-2.5" />
+                {connectionStatus === 'connected' ? 'GCS: LIVE' : connectionStatus === 'error' ? 'GCS: ERROR' : 'GCS: INIT'}
+              </div>
+              <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                <Timer className="w-2.5 h-2.5" /> {countdown}S
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="flex-1 h-16 bg-slate-950/40 border border-slate-800/60 rounded-2xl overflow-hidden group flex items-center relative mx-4 shadow-inner">
-          <div className="absolute left-0 top-0 bottom-0 z-20 bg-slate-900 border-r border-indigo-500/30 px-6 flex items-center gap-4">
-            <Cpu className="w-6 h-6 text-indigo-400 animate-pulse" />
-            <span className="text-xs font-black text-indigo-400 uppercase tracking-[0.3em] hidden xl:block">Core Intelligence</span>
-          </div>
-          <div className="flex-1 relative overflow-hidden h-full ml-[190px]">
-             <div className="absolute inset-x-0 top-0 animate-scroll-up-slow flex flex-col items-start justify-start py-5">
-                {reasoningPoints.map((point, i) => (
-                  <div key={i} className="h-7 flex items-center shrink-0 w-full px-10">
-                     <span className="text-sm font-black text-slate-200 uppercase tracking-[0.1em] whitespace-nowrap">
-                        <span className="text-indigo-500 mr-4 font-mono font-bold">//</span> {point}
-                     </span>
-                  </div>
-                ))}
-             </div>
-             <div className="absolute inset-x-0 top-0 h-5 bg-gradient-to-b from-slate-950/60 to-transparent z-10" />
-             <div className="absolute inset-x-0 bottom-0 h-5 bg-gradient-to-t from-slate-950/60 to-transparent z-10" />
           </div>
         </div>
 
         {currentSnapshot && (
-          <div className="flex items-center gap-8 shrink-0 ml-4 pl-8 border-l border-slate-800/60">
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest mb-1.5 leading-none">Clock</span>
-              <div className="flex items-center gap-2.5 bg-slate-800/40 px-4 py-2.5 rounded-xl border border-slate-700/50 shadow-lg">
-                <Clock className="w-4 h-4 text-indigo-400" />
-                <span className="text-lg font-mono font-black text-slate-100">{currentSnapshot.input?.current_et_time || '--:--'}</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-5">
-              <div className={`px-6 py-2.5 rounded-2xl flex flex-col items-center justify-center border transition-all shadow-xl ${
-                decodedOutput?.bias?.toUpperCase().includes('LONG') 
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
-                  : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
-              }`}>
-                <span className="text-[9px] font-black uppercase tracking-widest mb-1.5 opacity-60">System Bias</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-black text-base tracking-[0.1em] uppercase italic">{decodedOutput?.bias || 'NEUTRAL'}</span>
-                </div>
-              </div>
-
-              <div className="flex flex-col items-center">
-                <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-1.5 leading-none">Confidence</span>
-                <div className="text-4xl font-black font-mono px-5 py-1.5 rounded-xl border border-slate-700/50 text-slate-100 bg-slate-800/40 shadow-inner leading-none">
-                  {decodedOutput?.confidence || '0%'}
-                </div>
-              </div>
+          <div className="flex items-center gap-4">
+             {errorMsg && (
+               <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[10px] text-rose-400 font-black uppercase animate-pulse">
+                 <AlertCircle className="w-3 h-3" /> {errorMsg}
+               </div>
+             )}
+            <div className="flex items-center gap-3 bg-slate-800/80 px-5 py-2.5 rounded-2xl border border-slate-700/50 shadow-inner">
+              <Clock className="w-4 h-4 text-indigo-400" />
+              <span className="text-base font-mono font-black text-white tracking-tighter">{currentSnapshot.input.current_et_time}</span>
             </div>
           </div>
         )}
       </header>
 
       <main className="flex-1 flex overflow-hidden">
-        <aside className="w-80 border-r border-slate-800/60 bg-slate-900/30 overflow-hidden flex flex-col shrink-0">
-          <div className="p-5 border-b border-slate-800/60 bg-slate-900/50">
-             <div className="flex items-center justify-between mb-4 px-1">
-                <div className="flex items-center gap-3 text-indigo-400">
-                  <Calendar className="w-5 h-5" />
-                  <h2 className="text-xs font-black uppercase tracking-[0.2em]">Select Session</h2>
+        {/* Sidebar: File Listing */}
+        <aside className="w-72 border-r border-slate-800 bg-slate-900/30 flex flex-col shrink-0">
+          <div className="p-5 border-b border-slate-800/80">
+             <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Cloud className="w-4 h-4 text-indigo-400" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Bucket</span>
                 </div>
-                <button 
-                  onClick={() => fetchFileList(false)} 
-                  disabled={isLoading}
-                  className="p-1 hover:bg-slate-800 rounded transition-colors disabled:opacity-30"
-                >
-                  <RefreshCw className={`w-4 h-4 text-indigo-500 ${isLoading ? 'animate-spin' : ''}`} />
+                <button onClick={() => fetchFileList()} className="p-1.5 hover:bg-slate-800 rounded-lg transition-all group">
+                  <RefreshCw className={`w-4 h-4 text-slate-500 group-hover:text-indigo-400 ${isListLoading ? 'animate-spin' : ''}`} />
                 </button>
-              </div>
-
-              {isRateLimited && (
-                <div className="mb-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
-                  <div className="flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-amber-500" />
-                    <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest">Rate Limit Reached</span>
-                  </div>
-                  <p className="text-[9px] font-bold text-amber-200/60 leading-relaxed italic">
-                    GitHub's hourly API limit reached. App is using Offline Cache Mode. New sessions will appear once the limit resets.
-                  </p>
-                </div>
-              )}
-
-              {error && !isRateLimited && (
-                <div className="mb-3 px-3 py-2 bg-rose-500/10 border border-rose-500/20 rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                  <span className="text-[9px] font-bold text-rose-200/80 leading-tight">{error}</span>
-                </div>
-              )}
-
-              <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
-                {availableFiles.length > 0 ? (
-                  availableFiles.map(file => {
-                    const isActive = selectedFile === file;
-                    const displayName = file.replace(/\.jsonl?$/, '');
-                    const isDemo = file === "DEMO_2025_MOCK.json";
-                    return (
-                      <button 
-                        key={file} 
-                        onClick={() => handleFileSelect(file)}
-                        className={`w-full group text-left px-5 py-4 rounded-xl transition-all border flex items-center justify-center relative ${
-                          isActive 
-                            ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
-                            : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:border-slate-700 hover:text-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-4">
-                           {isDemo ? <Sparkles className="w-4 h-4 text-amber-400" /> : <FileJson className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-600'}`} />}
-                           <span className="text-xs font-mono font-black tracking-widest">{displayName}</span>
-                        </div>
-                        {isActive && (
-                          <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,1)]" />
-                        )}
-                      </button>
-                    );
-                  })
+             </div>
+             
+             {/* File List */}
+             <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                {availableFiles.length === 0 && !isListLoading ? (
+                  <div className="text-[10px] text-slate-600 font-mono text-center py-4 italic">No Files Found</div>
                 ) : (
-                  <div className="py-8 px-4 text-center bg-slate-950/30 border border-dashed border-slate-800 rounded-xl space-y-4">
-                    <Database className="w-6 h-6 text-slate-700 mx-auto" />
-                    <p className="text-[10px] font-black text-slate-600 uppercase tracking-widest leading-relaxed">
-                      Session stream is throttled by GitHub API.
-                    </p>
-                    <button 
-                      onClick={loadDemoMode}
-                      className="w-full py-2.5 bg-indigo-600/20 hover:bg-indigo-600/40 border border-indigo-500/30 text-indigo-300 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                    >
-                      <PlayCircle className="w-3.5 h-3.5" />
-                      Launch Demo Session
+                  availableFiles.map(f => (
+                    <button key={f} onClick={() => handleFileSelect(f)}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl text-[10px] font-mono transition-all border ${
+                        selectedFile === f ? 'bg-indigo-600/20 text-indigo-300 border-indigo-500/40 shadow-lg' : 'text-slate-500 border-transparent hover:bg-slate-800/40'
+                      }`}>
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-3 h-3 opacity-50" />
+                        {f}
+                      </div>
                     </button>
-                  </div>
+                  ))
                 )}
-              </div>
-              <div className="mt-4 px-1 flex justify-between items-center opacity-40">
-                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{availableFiles.length} Days Sync'd</span>
-                 <div className="h-px flex-1 mx-4 bg-slate-800" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">v7.8</span>
-              </div>
+             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-5 custom-scrollbar bg-slate-900/10">
-            <div className="flex items-center gap-3 mb-5 px-2 opacity-60">
-               <Layers className="w-4 h-4 text-slate-400" />
-               <h2 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Log History</h2>
+          {/* Session History (Intraday) */}
+          <div className="flex-1 overflow-y-auto p-5 custom-scrollbar mb-8">
+            <div className="flex items-center gap-2 mb-4 px-1">
+              <Cpu className="w-3.5 h-3.5 text-slate-600" />
+              <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-600">Session Sequence</h3>
             </div>
-            <div className="space-y-8">
-              {slicesByHour.map(([hour, items]) => (
-                <div key={hour} className="space-y-2">
-                  <div className="flex items-center justify-between px-2">
-                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">{hour}</span>
-                  </div>
-                  {items.map(({ idx, s }) => {
-                    const active = idx === selectedIndex;
-                    const biasVal = s.decoded?.bias || 'NEUTRAL';
-                    return (
-                      <button key={idx} onClick={() => { setSelectedIndex(idx); autoScrollEnabled.current = (idx === processedSnapshots.length - 1); }}
-                        className={`w-full text-left px-4 py-3 rounded-xl transition-all border group flex items-center justify-between gap-2 ${
-                          active ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg' : 'bg-slate-900/30 border-slate-800/60 hover:bg-slate-800/40'
-                        }`}>
-                        <span className={`text-xs font-black font-mono tracking-widest ${active ? 'text-white' : 'text-slate-400'}`}>
-                          {s.input?.current_et_time || '--:--'}
-                        </span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded font-black uppercase border ${
-                          active 
-                            ? 'bg-white/20 border-white/30 text-white' 
-                            : biasVal.includes('LONG') ? 'text-emerald-400 border-emerald-500/20' : 'text-rose-400 border-rose-500/20'
-                        }`}>
-                          {biasVal}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-              <div ref={slicesEndRef} className="h-5" />
+            <div className="space-y-2.5">
+              {processedSnapshots.map((s, idx) => {
+                const active = idx === selectedIndex;
+                const bias = (s.decoded?.bias || 'NEUTRAL').toUpperCase();
+                return (
+                  <button key={idx} onClick={() => { setSelectedIndex(idx); autoScrollEnabled.current = (idx === processedSnapshots.length-1); }}
+                    className={`w-full text-left p-4 rounded-2xl transition-all border group relative overflow-hidden ${
+                      active ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-slate-900/60 border-slate-800/60 hover:border-slate-600'
+                    }`}>
+                    <div className="flex items-center justify-between relative z-10">
+                      <span className={`text-[11px] font-black font-mono ${active ? 'text-white' : 'text-slate-400'}`}>{s.input.current_et_time}</span>
+                      <span className={`text-[9px] px-2 py-0.5 rounded-lg font-black uppercase tracking-tighter ${
+                        active ? 'bg-white/20' : bias.includes('LONG') ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : bias.includes('SHORT') ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : 'text-slate-600 bg-slate-800'
+                      }`}>
+                        {bias}
+                      </span>
+                    </div>
+                  </button>
+                );
+              }).reverse()}
             </div>
-          </div>
-
-          <div className="p-5 border-t border-slate-800/60 bg-slate-900/50">
-             <button onClick={runAiAudit} disabled={isAuditing}
-               className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 rounded-xl flex items-center justify-center gap-3 text-[11px] font-black uppercase tracking-[0.2em] transition-all shadow-lg border border-white/10">
-                {isAuditing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
-                {isAuditing ? 'Auditing session...' : 'Run Session AI Audit'}
-             </button>
           </div>
         </aside>
 
-        <section className="flex-1 bg-slate-950 p-8 overflow-hidden relative shadow-inner">
-          {aiAudit && (
-            <div className="absolute top-8 left-8 right-8 z-[100] animate-in fade-in slide-in-from-top-4">
-              <div className="bg-slate-900/95 backdrop-blur-3xl border border-indigo-500/30 rounded-2xl p-8 shadow-2xl">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
-                   <div className="flex items-center gap-4">
-                     <span className="p-2 bg-indigo-500/10 rounded-lg"><Sparkles className="w-6 h-6 text-indigo-400" /></span>
-                     <h4 className="text-xs font-black uppercase tracking-[0.2em]">Session Audit</h4>
-                   </div>
-                   <button onClick={() => setAiAudit(null)} className="text-slate-500 hover:text-white transition-all text-xl">✕</button>
-                </div>
-                <div className="flex flex-col lg:flex-row gap-8">
-                  <div className="flex-1"><span className="text-[11px] text-slate-500 uppercase block mb-3 font-black">Summary</span><p className="text-base font-bold text-slate-200 italic leading-relaxed">{aiAudit.summary}</p></div>
-                  <div className="lg:max-w-[320px] border-l border-slate-800 pl-8"><span className="text-[11px] text-slate-500 uppercase block mb-4 font-black">Key Shifts</span><div className="space-y-3">{aiAudit.shifts.map((s, i) => <div key={i} className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-3 py-2 rounded border border-indigo-500/20">{s}</div>)}</div></div>
-                </div>
-              </div>
-            </div>
-          )}
+        {/* Main Dashboard Area */}
+        <section className="flex-1 bg-slate-950 p-6 overflow-hidden relative shadow-inner flex flex-col mb-8">
           {currentSnapshot ? (
             <Dashboard 
               snapshot={currentSnapshot} 
-              output={decodedOutput} 
+              output={currentSnapshot.decoded || null} 
               allSnapshots={processedSnapshots} 
             />
           ) : (
-            <div className="h-full flex flex-col items-center justify-center opacity-30 select-none">
-              <Database className="w-20 h-20 mb-8 text-indigo-500 animate-pulse" />
-              <h3 className="italic font-black uppercase tracking-[0.5em] text-3xl text-center">
-                {isLoading ? 'Synchronizing Stream...' : 'Terminal Standby'}
-              </h3>
-              {error && <p className="mt-4 text-rose-500 font-mono text-xs uppercase tracking-widest">{error}</p>}
-              {isRateLimited && availableFiles.length === 0 && (
-                <button 
-                  onClick={loadDemoMode}
-                  className="mt-8 px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-2xl"
-                >
-                  Start Demo Mode
-                </button>
-              )}
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-700">
+               {connectionStatus === 'error' ? (
+                 <>
+                   <AlertCircle className="w-16 h-16 mb-4 text-rose-500/50" />
+                   <span className="text-sm font-black uppercase tracking-[0.3em] text-rose-400">Connection Failed</span>
+                   <p className="text-[10px] mt-2 font-mono text-rose-500/60 max-w-md text-center">{errorMsg}</p>
+                 </>
+               ) : (
+                 <>
+                   <Loader2 className="w-12 h-12 mb-4 animate-spin text-indigo-500/50" />
+                   <span className="text-sm font-black uppercase tracking-[0.5em] italic animate-pulse">Establishing Uplink...</span>
+                 </>
+               )}
+               
+               {/* DEBUG LOG CONSOLE */}
+               <div className="mt-8 w-full max-w-2xl bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden font-mono text-[10px] shadow-2xl">
+                 <div className="bg-slate-900 border-b border-slate-800 px-3 py-1.5 flex items-center justify-between text-slate-500">
+                    <div className="flex items-center gap-2">
+                       <TerminalSquare className="w-3 h-3" />
+                       <span className="uppercase tracking-widest font-black">Debug Log</span>
+                    </div>
+                    <Activity className="w-3 h-3 animate-pulse text-indigo-500" />
+                 </div>
+                 <div className="p-3 space-y-1.5 h-32 overflow-y-auto custom-scrollbar">
+                    {logs.map((log, i) => (
+                      <div key={i} className="text-slate-400 border-b border-slate-800/30 pb-1 last:border-0 last:pb-0 break-all">
+                        {log}
+                      </div>
+                    ))}
+                    {logs.length === 0 && <span className="text-slate-600 italic">Initializing network handlers...</span>}
+                 </div>
+               </div>
             </div>
           )}
         </section>
       </main>
+
+      {/* PERSISTENT NETWORK DEBUG BAR */}
+      <div className="absolute bottom-0 w-full bg-slate-900 border-t border-slate-800 h-8 flex items-center px-4 justify-between z-[200]">
+        <div className="flex items-center gap-4 overflow-hidden">
+          <div className="flex items-center gap-2 shrink-0">
+            <Network className="w-3 h-3 text-indigo-400" />
+            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Network Stream</span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] font-mono text-slate-300 overflow-hidden text-ellipsis whitespace-nowrap">
+             <span className="text-indigo-500 font-bold">[GET]</span>
+             <span className="opacity-70 text-ellipsis overflow-hidden">{lastFetchUrl || "Waiting..."}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+           <div className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+             lastFetchStatus.startsWith('200') ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'
+           }`}>
+             {lastFetchStatus || "IDLE"}
+           </div>
+        </div>
+      </div>
     </div>
   );
 };
