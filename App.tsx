@@ -24,12 +24,20 @@ import {
   Brain,
   ArrowUpRight,
   ArrowDownRight,
-  Target
+  Target,
+  LogOut,
+  Lock,
+  ShieldCheck,
+  Key,
+  ChevronRight,
+  User,
+  FileJson
 } from 'lucide-react';
 
-// Public GCS Bucket
+// --- CONFIGURATION ---
 const GCS_BUCKET_BASE = "https://storage.googleapis.com/rockit-data"; 
 const REFRESH_INTERVAL_SEC = 120; 
+const ACCESS_CODE = "hello123";
 
 const hardenedClean = (raw: string): string => {
   if (!raw) return "";
@@ -70,7 +78,88 @@ const salvageIntel = (raw: string): Partial<DecodedOutput> => {
   return salvaged;
 };
 
+const LoginScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === ACCESS_CODE) {
+      onLogin();
+    } else {
+      setError(true);
+      setPassword("");
+    }
+  };
+
+  return (
+    <div className="h-screen w-screen bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Background Elements */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse"></div>
+      </div>
+      
+      <div className="relative z-10 bg-slate-900/60 border border-slate-800 p-12 rounded-[2.5rem] shadow-2xl backdrop-blur-xl flex flex-col items-center max-w-md w-full text-center">
+        <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 mb-8 shadow-xl">
+           <LayoutDashboard className="w-12 h-12 text-indigo-500" />
+        </div>
+        
+        <h1 className="text-3xl font-black italic tracking-tighter text-white uppercase mb-2">
+          ROCKIT <span className="text-indigo-500">ENGINE</span>
+        </h1>
+        <p className="text-xs font-mono text-slate-400 tracking-[0.3em] uppercase mb-10">
+          Intelligence Protocol Access
+        </p>
+
+        <form onSubmit={handleSubmit} className="w-full max-w-xs space-y-4">
+           <div className="relative group">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                 <Key className={`w-4 h-4 ${error ? 'text-rose-500' : 'text-slate-500 group-focus-within:text-indigo-500'} transition-colors`} />
+              </div>
+              <input 
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(false); }}
+                className={`w-full bg-slate-950/50 border ${error ? 'border-rose-500/50 focus:border-rose-500' : 'border-slate-700/50 focus:border-indigo-500'} text-white text-sm rounded-xl py-3 pl-10 pr-4 outline-none transition-all placeholder:text-slate-600 font-mono tracking-widest`}
+                placeholder="ENTER ACCESS CODE"
+                autoFocus
+              />
+           </div>
+           
+           <button 
+             type="submit"
+             className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-black uppercase tracking-widest text-xs py-3 rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] flex items-center justify-center gap-2 group"
+           >
+             <span>Initialize Uplink</span>
+             <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+           </button>
+        </form>
+        
+        {error && (
+           <div className="mt-4 flex items-center gap-2 text-[10px] text-rose-500 font-bold uppercase tracking-wider animate-in fade-in slide-in-from-top-1">
+              <AlertCircle className="w-3 h-3" />
+              <span>Access Denied: Invalid Credentials</span>
+           </div>
+        )}
+
+        <div className="flex items-center gap-2 text-[10px] text-slate-600 font-bold uppercase tracking-widest mt-8">
+          <Lock className="w-3 h-3" />
+          <span>Restricted Environment</span>
+        </div>
+      </div>
+      
+      <div className="absolute bottom-8 text-[9px] text-slate-700 font-mono">
+        SECURE UPLINK v3.4.1
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // App Data State
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
@@ -92,6 +181,11 @@ const App: React.FC = () => {
 
   const autoScrollEnabled = useRef(true);
   const lastLatestTimeRef = useRef<string | null>(null);
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setSnapshots([]);
+  };
 
   const addLog = (msg: string) => {
     console.log(`[ROCKIT] ${msg}`);
@@ -254,14 +348,16 @@ const App: React.FC = () => {
     }
   };
 
-  // Initial Load
+  // Initial Load (Only if User is logged in)
   useEffect(() => {
-    fetchFileList();
-  }, []);
+    if (isAuthenticated) {
+      fetchFileList();
+    }
+  }, [isAuthenticated]); 
 
   // Countdown Timer
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || !isAuthenticated) return; // Only count down if logged in
 
     const timer = setInterval(() => {
       setCountdown(prev => {
@@ -273,7 +369,7 @@ const App: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [isPaused]);
+  }, [isPaused, isAuthenticated]);
 
   const processedSnapshots = useMemo(() => {
     return snapshots.map(s => {
@@ -346,6 +442,11 @@ const App: React.FC = () => {
       <span className="text-[8px] font-black uppercase tracking-wider">{label}</span>
     </button>
   );
+
+  // --- RENDER GUARD ---
+  if (!isAuthenticated) {
+    return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden font-sans select-none antialiased relative">
@@ -420,6 +521,7 @@ const App: React.FC = () => {
                 <TabButton id="profile" label="Profile" icon={BarChartHorizontal} />
                 <TabButton id="tpo" label="TPO" icon={Grid3X3} />
                 {thinkingText && <TabButton id="thinking" label="Think" icon={Brain} />}
+                <TabButton id="json" label="JSON" icon={FileJson} />
              </div>
 
              {/* Metrics: Score & Bias */}
@@ -442,20 +544,37 @@ const App: React.FC = () => {
            </div>
         ) : <div className="flex-1" />}
 
-        {/* Right: Clock & Error */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Right: Clock & User */}
+        <div className="flex items-center gap-4 shrink-0">
            {errorMsg && (
                <div className="hidden xl:flex items-center gap-1.5 px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[9px] text-rose-400 font-black uppercase animate-pulse">
                  <AlertCircle className="w-3 h-3" /> {errorMsg}
                </div>
            )}
            
-           {currentSnapshot && (
-             <div className="flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700/50 shadow-inner">
-               <Clock className="w-4 h-4 text-indigo-400" />
-               <span className="text-sm font-mono font-black text-white tracking-tighter">{currentSnapshot.input.current_et_time}</span>
-             </div>
-           )}
+           <div className="flex items-center gap-2">
+               {currentSnapshot && (
+                 <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-xl border border-slate-700/50 shadow-inner">
+                   <Clock className="w-4 h-4 text-indigo-400" />
+                   <span className="text-sm font-mono font-black text-white tracking-tighter">{currentSnapshot.input.current_et_time}</span>
+                 </div>
+               )}
+
+               {/* User Profile / Logout */}
+               <div className="group relative flex items-center">
+                 <button onClick={handleLogout} className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full bg-slate-800/50 hover:bg-slate-800 border border-slate-700 transition-all hover:pr-3">
+                   <div className="w-7 h-7 rounded-full bg-slate-700 flex items-center justify-center border border-slate-600">
+                      <User className="w-4 h-4 text-slate-300" />
+                   </div>
+                   <div className="w-0 overflow-hidden group-hover:w-auto transition-all duration-300 whitespace-nowrap">
+                     <span className="text-[10px] font-bold text-slate-300 uppercase mr-1">Logout</span>
+                   </div>
+                   <div className="p-1 bg-slate-900 rounded-full group-hover:bg-rose-500/20 group-hover:text-rose-400 transition-colors">
+                      <LogOut className="w-3 h-3 text-slate-400 group-hover:text-rose-400" />
+                   </div>
+                 </button>
+               </div>
+           </div>
         </div>
       </header>
 

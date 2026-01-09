@@ -35,7 +35,8 @@ import {
   Minimize2,
   BarChart2,
   Waypoints,
-  Gauge
+  Gauge,
+  FileJson
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 import TPOChart from './TPOChart';
@@ -211,10 +212,40 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     return 'text-slate-400 bg-slate-800 border-slate-700';
   };
 
+  if (activeTab === 'json') {
+      return (
+          <div className="h-full flex flex-col xl:flex-row gap-4 overflow-hidden animate-in fade-in duration-500">
+              {/* Input Section */}
+              <div className="flex-1 bg-slate-900/60 border border-slate-800 rounded-[2rem] flex flex-col overflow-hidden shadow-2xl min-h-0">
+                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/50 flex items-center gap-3">
+                     <FileJson className="w-5 h-5 text-emerald-400" />
+                     <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Input Data Stream</span>
+                 </div>
+                 <div className="flex-1 overflow-auto custom-scrollbar p-6 bg-slate-950/30">
+                     <pre className="text-base font-mono text-emerald-300 whitespace-pre-wrap break-all leading-loose font-bold">
+                         {JSON.stringify(snapshot.input, null, 2)}
+                     </pre>
+                 </div>
+              </div>
+
+              {/* Output Section */}
+              <div className="flex-1 bg-slate-900/60 border border-slate-800 rounded-[2rem] flex flex-col overflow-hidden shadow-2xl min-h-0">
+                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/50 flex items-center gap-3">
+                     <Brain className="w-5 h-5 text-indigo-400" />
+                     <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Model Output</span>
+                 </div>
+                 <div className="flex-1 overflow-auto custom-scrollbar p-6 bg-slate-950/30">
+                     <pre className="text-base font-mono text-indigo-300 whitespace-pre-wrap break-all leading-loose font-bold">
+                         {JSON.stringify(output || snapshot.output, null, 2)}
+                     </pre>
+                 </div>
+              </div>
+          </div>
+      );
+  }
+
   return (
     <div className="flex flex-col h-full gap-4 overflow-hidden">
-      {/* Strategic Banner Removed - Content Moved to App Header */}
-
       <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
         {/* Left Side: Chart (Takes remaining space) */}
         <div className="flex-1 min-w-0 bg-slate-900/40 border border-slate-800 rounded-[2rem] p-5 flex flex-col shadow-inner relative group min-h-0">
@@ -272,17 +303,17 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 {/* 1. Header Grid: Day Type, Confidence */}
                 <div className="grid grid-cols-2 gap-4">
                    <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col justify-center">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Day Type</span>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Day Type</span>
                       <div className="flex items-center gap-2">
                         <Activity className="w-5 h-5 text-indigo-400" />
-                        <span className="text-base font-black text-slate-200 tracking-tight">{dayType}</span>
+                        <span className="text-lg font-black text-slate-200 tracking-tight">{dayType}</span>
                       </div>
                    </div>
                    <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col justify-center">
-                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Confidence</span>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Confidence</span>
                       <div className="flex items-center gap-2">
                         <Target className="w-5 h-5 text-emerald-400" />
-                        <span className="text-base font-black text-slate-200 tracking-tight">{output?.confidence || '0%'}</span>
+                        <span className="text-lg font-black text-slate-200 tracking-tight">{output?.confidence || '0%'}</span>
                       </div>
                    </div>
                 </div>
@@ -291,18 +322,18 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 <div className="bg-indigo-500/5 border border-indigo-500/20 p-6 rounded-3xl relative overflow-hidden">
                    <div className="flex items-center gap-2 mb-3 text-indigo-400">
                      <Fingerprint className="w-5 h-5" />
-                     <span className="text-[10px] font-black uppercase tracking-[0.3em]">Core Synthesis</span>
+                     <span className="text-xs font-black uppercase tracking-[0.3em]">Core Synthesis</span>
                    </div>
-                   <p className="text-lg font-bold italic text-white leading-relaxed tracking-tight opacity-90">"{narrative}"</p>
+                   <p className="text-xl font-bold italic text-white leading-relaxed tracking-tight opacity-90">"{narrative}"</p>
                 </div>
 
                 {/* 3. Value Acceptance */}
                 <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl">
                    <div className="flex items-center gap-2 mb-3 text-sky-400">
                      <AlignJustify className="w-5 h-5" />
-                     <span className="text-[10px] font-black uppercase tracking-[0.3em]">Value Acceptance</span>
+                     <span className="text-xs font-black uppercase tracking-[0.3em]">Value Acceptance</span>
                    </div>
-                   <p className="text-sm font-mono font-medium text-slate-400 leading-relaxed uppercase tracking-tight">
+                   <p className="text-base font-mono font-medium text-slate-300 leading-relaxed uppercase tracking-tight">
                      {valueAcceptance}
                    </p>
                 </div>
@@ -311,22 +342,22 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 <div className="bg-slate-900/40 border border-slate-800 p-6 rounded-3xl">
                    <div className="flex items-center gap-2 mb-4 text-violet-400">
                      <ScanBarcode className="w-5 h-5" />
-                     <span className="text-[10px] font-black uppercase tracking-[0.3em]">TPO Structure</span>
+                     <span className="text-xs font-black uppercase tracking-[0.3em]">TPO Structure</span>
                    </div>
                    <div className="grid gap-4">
                       <div>
-                         <span className="text-[9px] text-slate-500 uppercase font-black tracking-wider block mb-1">Profile Signal</span>
-                         <span className="text-sm font-mono font-medium text-slate-300 block">{tpoRead?.profile_signals || "N/A"}</span>
+                         <span className="text-xs text-slate-400 uppercase font-bold tracking-wider block mb-1">Profile Signal</span>
+                         <span className="text-sm font-mono font-medium text-slate-200 block">{tpoRead?.profile_signals || "N/A"}</span>
                       </div>
                       <div className="h-px bg-slate-800/50" />
                       <div>
-                         <span className="text-[9px] text-slate-500 uppercase font-black tracking-wider block mb-1">Migration</span>
-                         <span className="text-sm font-mono font-medium text-slate-300 block">{tpoRead?.dpoc_migration || "N/A"}</span>
+                         <span className="text-xs text-slate-400 uppercase font-bold tracking-wider block mb-1">Migration</span>
+                         <span className="text-sm font-mono font-medium text-slate-200 block">{tpoRead?.dpoc_migration || "N/A"}</span>
                       </div>
                       <div className="h-px bg-slate-800/50" />
                       <div>
-                         <span className="text-[9px] text-slate-500 uppercase font-black tracking-wider block mb-1">State</span>
-                         <span className="text-sm font-mono font-medium text-slate-300 block">{tpoRead?.extreme_or_compression || "N/A"}</span>
+                         <span className="text-xs text-slate-400 uppercase font-bold tracking-wider block mb-1">State</span>
+                         <span className="text-sm font-mono font-medium text-slate-200 block">{tpoRead?.extreme_or_compression || "N/A"}</span>
                       </div>
                    </div>
                 </div>
@@ -335,7 +366,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                 <div className="bg-slate-900/60 border border-slate-800/80 rounded-[1.5rem] p-6 shadow-xl">
                    <div className="flex items-center gap-3 mb-4">
                      <div className="p-1.5 bg-indigo-500/10 rounded-lg border border-indigo-500/20"><CheckCircle2 className="w-4 h-4 text-indigo-400" /></div>
-                     <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Logic Driver</h4>
+                     <h4 className="text-xs font-black uppercase tracking-widest text-slate-300">Logic Driver</h4>
                    </div>
                    <div className="space-y-3">
                       {reasoning.length > 0 ? reasoning.map((r, i) => (
@@ -344,7 +375,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                           <p className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors leading-relaxed">{r}</p>
                         </div>
                       )) : (
-                        <div className="text-center py-6 opacity-30 text-[10px] font-mono">NO DATA</div>
+                        <div className="text-center py-6 opacity-30 text-xs font-mono">NO DATA</div>
                       )}
                    </div>
                 </div>
@@ -357,36 +388,36 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                  {core?.note && (
                     <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl flex items-start gap-3">
                         <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                        <p className="text-xs font-mono font-medium text-indigo-200 leading-relaxed italic">"{core.note}"</p>
+                        <p className="text-sm font-mono font-medium text-indigo-200 leading-relaxed italic">"{core.note}"</p>
                     </div>
                  )}
                  <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
                      <div className="flex items-center gap-3 mb-4">
                         <Shield className="w-5 h-5 text-orange-400" />
-                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-300">IB Acceptance</h4>
+                        <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">IB Acceptance</h4>
                      </div>
                      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                         <div className="flex justify-between items-center border-b border-slate-800/50 pb-2">
-                           <span className="text-[11px] font-bold text-slate-500">Close Above IBH</span>
-                           <span className={`text-xs font-mono font-black ${core?.ib_acceptance?.close_above_ibh ? 'text-emerald-400' : 'text-slate-600'}`}>
+                           <span className="text-xs font-bold text-slate-400">Close Above IBH</span>
+                           <span className={`text-sm font-mono font-black ${core?.ib_acceptance?.close_above_ibh ? 'text-emerald-400' : 'text-slate-600'}`}>
                               {core?.ib_acceptance?.close_above_ibh ? 'YES' : 'NO'}
                            </span>
                         </div>
                         <div className="flex justify-between items-center border-b border-slate-800/50 pb-2">
-                           <span className="text-[11px] font-bold text-slate-500">Close Below IBL</span>
-                           <span className={`text-xs font-mono font-black ${core?.ib_acceptance?.close_below_ibl ? 'text-rose-400' : 'text-slate-600'}`}>
+                           <span className="text-xs font-bold text-slate-400">Close Below IBL</span>
+                           <span className={`text-sm font-mono font-black ${core?.ib_acceptance?.close_below_ibl ? 'text-rose-400' : 'text-slate-600'}`}>
                               {core?.ib_acceptance?.close_below_ibl ? 'YES' : 'NO'}
                            </span>
                         </div>
                         <div className="flex justify-between items-center">
-                           <span className="text-[11px] font-bold text-slate-500">Accepted Higher</span>
-                           <span className={`text-[10px] font-black uppercase ${core?.ib_acceptance?.price_accepted_higher === 'Yes' ? 'text-emerald-400' : 'text-slate-600'}`}>
+                           <span className="text-xs font-bold text-slate-400">Accepted Higher</span>
+                           <span className={`text-xs font-black uppercase ${core?.ib_acceptance?.price_accepted_higher === 'Yes' ? 'text-emerald-400' : 'text-slate-600'}`}>
                               {core?.ib_acceptance?.price_accepted_higher || 'NO'}
                            </span>
                         </div>
                         <div className="flex justify-between items-center">
-                           <span className="text-[11px] font-bold text-slate-500">Accepted Lower</span>
-                           <span className={`text-[10px] font-black uppercase ${core?.ib_acceptance?.price_accepted_lower === 'Yes' ? 'text-rose-400' : 'text-slate-600'}`}>
+                           <span className="text-xs font-bold text-slate-400">Accepted Lower</span>
+                           <span className={`text-xs font-black uppercase ${core?.ib_acceptance?.price_accepted_lower === 'Yes' ? 'text-rose-400' : 'text-slate-600'}`}>
                               {core?.ib_acceptance?.price_accepted_lower || 'NO'}
                            </span>
                         </div>
@@ -397,24 +428,24 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                     <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
                         <div className="flex items-center gap-2 mb-2">
                            <GitCommit className="w-4 h-4 text-indigo-400" />
-                           <span className="text-[10px] font-bold text-slate-500 uppercase">DPOC Position</span>
+                           <span className="text-xs font-bold text-slate-400 uppercase">DPOC Position</span>
                         </div>
                         <div className="space-y-2">
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-400">Vs IBH</span>
-                              <span className={`text-[10px] font-mono font-bold ${core?.dpoc_vs_ib?.dpoc_above_ibh ? 'text-emerald-400' : 'text-slate-600'}`}>
+                              <span className="text-xs text-slate-400">Vs IBH</span>
+                              <span className={`text-xs font-mono font-bold ${core?.dpoc_vs_ib?.dpoc_above_ibh ? 'text-emerald-400' : 'text-slate-600'}`}>
                                 {core?.dpoc_vs_ib?.dpoc_above_ibh ? '> IBH' : '---'}
                               </span>
                            </div>
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-400">Vs IBL</span>
-                              <span className={`text-[10px] font-mono font-bold ${core?.dpoc_vs_ib?.dpoc_below_ibl ? 'text-rose-400' : 'text-slate-600'}`}>
+                              <span className="text-xs text-slate-400">Vs IBL</span>
+                              <span className={`text-xs font-mono font-bold ${core?.dpoc_vs_ib?.dpoc_below_ibl ? 'text-rose-400' : 'text-slate-600'}`}>
                                 {core?.dpoc_vs_ib?.dpoc_below_ibl ? '< IBL' : '---'}
                               </span>
                            </div>
                            <div className="flex justify-between items-center border-t border-slate-800/50 pt-1.5">
-                              <span className="text-[10px] text-slate-400">Shift</span>
-                              <span className="text-[10px] font-mono text-slate-300 uppercase">{core?.dpoc_vs_ib?.dpoc_extreme_shift}</span>
+                              <span className="text-xs text-slate-400">Shift</span>
+                              <span className="text-xs font-mono text-slate-300 uppercase">{core?.dpoc_vs_ib?.dpoc_extreme_shift}</span>
                            </div>
                         </div>
                     </div>
@@ -422,24 +453,24 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                     <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
                         <div className="flex items-center gap-2 mb-2">
                            <Minimize2 className="w-4 h-4 text-amber-400" />
-                           <span className="text-[10px] font-bold text-slate-500 uppercase">Compression</span>
+                           <span className="text-xs font-bold text-slate-400 uppercase">Compression</span>
                         </div>
                         <div className="space-y-2">
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-400">Vs VAH</span>
-                              <span className={`text-[10px] font-mono font-bold ${core?.dpoc_compression?.compressing_against_vah ? 'text-emerald-400' : 'text-slate-600'}`}>
+                              <span className="text-xs text-slate-400">Vs VAH</span>
+                              <span className={`text-xs font-mono font-bold ${core?.dpoc_compression?.compressing_against_vah ? 'text-emerald-400' : 'text-slate-600'}`}>
                                 {core?.dpoc_compression?.compressing_against_vah ? 'YES' : 'NO'}
                               </span>
                            </div>
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-400">Vs VAL</span>
-                              <span className={`text-[10px] font-mono font-bold ${core?.dpoc_compression?.compressing_against_val ? 'text-rose-400' : 'text-slate-600'}`}>
+                              <span className="text-xs text-slate-400">Vs VAL</span>
+                              <span className={`text-xs font-mono font-bold ${core?.dpoc_compression?.compressing_against_val ? 'text-rose-400' : 'text-slate-600'}`}>
                                 {core?.dpoc_compression?.compressing_against_val ? 'YES' : 'NO'}
                               </span>
                            </div>
                            <div className="flex justify-between items-center border-t border-slate-800/50 pt-1.5">
-                              <span className="text-[10px] text-slate-400">Bias</span>
-                              <span className="text-[9px] font-mono text-slate-300 uppercase truncate max-w-[80px]" title={core?.dpoc_compression?.compression_bias}>
+                              <span className="text-xs text-slate-400">Bias</span>
+                              <span className="text-xs font-mono text-slate-300 uppercase truncate max-w-[80px]" title={core?.dpoc_compression?.compression_bias}>
                                 {core?.dpoc_compression?.compression_bias}
                               </span>
                            </div>
@@ -450,25 +481,25 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                  <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
                      <div className="flex items-center gap-3 mb-4">
                         <Route className="w-5 h-5 text-violet-400" />
-                        <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-300">Migration Vector</h4>
+                        <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Migration Vector</h4>
                      </div>
                      <div className="flex items-center justify-between">
                         <div className="text-center">
-                           <span className="text-[10px] text-slate-500 block mb-1">Net Direction</span>
-                           <span className={`text-sm font-black uppercase ${
+                           <span className="text-xs text-slate-500 block mb-1">Net Direction</span>
+                           <span className={`text-base font-black uppercase ${
                              core?.migration?.net_direction === 'up' ? 'text-emerald-400' : 
                              core?.migration?.net_direction === 'down' ? 'text-rose-400' : 'text-slate-400'
                            }`}>{core?.migration?.net_direction}</span>
                         </div>
                          <div className="w-px h-8 bg-slate-800" />
                         <div className="text-center">
-                           <span className="text-[10px] text-slate-500 block mb-1">Delta Pts</span>
-                           <span className="text-sm font-mono font-bold text-white">{core?.migration?.pts_since_1030}</span>
+                           <span className="text-xs text-slate-500 block mb-1">Delta Pts</span>
+                           <span className="text-base font-mono font-bold text-white">{core?.migration?.pts_since_1030}</span>
                         </div>
                         <div className="w-px h-8 bg-slate-800" />
                         <div className="text-center">
-                           <span className="text-[10px] text-slate-500 block mb-1">Significant</span>
-                           <span className={`text-sm font-black ${
+                           <span className="text-xs text-slate-500 block mb-1">Significant</span>
+                           <span className={`text-base font-black ${
                              core?.migration?.significant_up || core?.migration?.significant_down ? 'text-amber-400' : 'text-slate-600'
                            }`}>{core?.migration?.significant_up || core?.migration?.significant_down ? 'YES' : 'NO'}</span>
                         </div>
@@ -483,28 +514,28 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg relative overflow-hidden">
                      <div className="flex items-center gap-3 mb-5 border-b border-slate-800/50 pb-3">
                         <Shield className="w-5 h-5 text-orange-400" />
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Initial Balance</span>
+                        <span className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Initial Balance</span>
                      </div>
                      <div className="grid grid-cols-2 gap-y-5 gap-x-6">
                          <div>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">IB High</span>
-                            <span className="text-base font-mono font-black text-white">{Number(ib?.ib_high).toFixed(2)}</span>
+                            <span className="text-xs text-slate-400 font-bold uppercase block mb-1">IB High</span>
+                            <span className="text-lg font-mono font-black text-white">{Number(ib?.ib_high).toFixed(2)}</span>
                          </div>
                          <div>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">IB Low</span>
-                            <span className="text-base font-mono font-black text-white">{Number(ib?.ib_low).toFixed(2)}</span>
+                            <span className="text-xs text-slate-400 font-bold uppercase block mb-1">IB Low</span>
+                            <span className="text-lg font-mono font-black text-white">{Number(ib?.ib_low).toFixed(2)}</span>
                          </div>
                          <div>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Mid</span>
-                            <span className="text-base font-mono font-black text-indigo-400">{Number(ib?.ib_mid).toFixed(2)}</span>
+                            <span className="text-xs text-slate-400 font-bold uppercase block mb-1">Mid</span>
+                            <span className="text-lg font-mono font-black text-indigo-400">{Number(ib?.ib_mid).toFixed(2)}</span>
                          </div>
                          <div>
-                            <span className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Range</span>
-                            <span className="text-base font-mono font-black text-slate-300">{Number(ib?.ib_range).toFixed(2)} pts</span>
+                            <span className="text-xs text-slate-400 font-bold uppercase block mb-1">Range</span>
+                            <span className="text-lg font-mono font-black text-slate-300">{Number(ib?.ib_range).toFixed(2)} pts</span>
                          </div>
                          <div className="col-span-2 pt-2 border-t border-slate-800/50 flex items-center justify-between">
-                             <span className="text-[10px] text-slate-500 font-bold uppercase">Status</span>
-                             <span className="text-xs font-black uppercase text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/20">{ib?.ib_status}</span>
+                             <span className="text-xs text-slate-400 font-bold uppercase">Status</span>
+                             <span className="text-sm font-black uppercase text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-lg border border-emerald-500/20">{ib?.ib_status}</span>
                          </div>
                      </div>
                   </div>
@@ -514,29 +545,29 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
                         <div className="flex items-center gap-2 mb-4">
                            <Activity className="w-4 h-4 text-sky-400" />
-                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Technicals</span>
+                           <span className="text-xs font-black uppercase tracking-widest text-slate-400">Technicals</span>
                         </div>
                         <div className="space-y-3">
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-500 font-bold">RSI (14)</span>
-                              <span className={`text-sm font-mono font-black ${Number(ib?.rsi14) > 70 ? 'text-rose-400' : Number(ib?.rsi14) < 30 ? 'text-emerald-400' : 'text-slate-300'}`}>{Number(ib?.rsi14).toFixed(2)}</span>
+                              <span className="text-xs text-slate-400 font-bold">RSI (14)</span>
+                              <span className={`text-base font-mono font-black ${Number(ib?.rsi14) > 70 ? 'text-rose-400' : Number(ib?.rsi14) < 30 ? 'text-emerald-400' : 'text-slate-300'}`}>{Number(ib?.rsi14).toFixed(2)}</span>
                            </div>
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-slate-500 font-bold">ATR (14)</span>
-                              <span className="text-sm font-mono font-black text-slate-300">{Number(ib?.atr14).toFixed(2)}</span>
+                              <span className="text-xs text-slate-400 font-bold">ATR (14)</span>
+                              <span className="text-base font-mono font-black text-slate-300">{Number(ib?.atr14).toFixed(2)}</span>
                            </div>
                            <div className="h-px bg-slate-800/50 my-2" />
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-sky-500/70 font-bold">EMA 20</span>
-                              <span className="text-xs font-mono font-bold text-slate-400">{Number(ib?.ema20).toFixed(2)}</span>
+                              <span className="text-xs text-sky-500/70 font-bold">EMA 20</span>
+                              <span className="text-sm font-mono font-bold text-slate-400">{Number(ib?.ema20).toFixed(2)}</span>
                            </div>
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-indigo-500/70 font-bold">EMA 50</span>
-                              <span className="text-xs font-mono font-bold text-slate-400">{Number(ib?.ema50).toFixed(2)}</span>
+                              <span className="text-xs text-indigo-500/70 font-bold">EMA 50</span>
+                              <span className="text-sm font-mono font-bold text-slate-400">{Number(ib?.ema50).toFixed(2)}</span>
                            </div>
                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] text-violet-500/70 font-bold">EMA 200</span>
-                              <span className="text-xs font-mono font-bold text-slate-400">{Number(ib?.ema200).toFixed(2)}</span>
+                              <span className="text-xs text-violet-500/70 font-bold">EMA 200</span>
+                              <span className="text-sm font-mono font-bold text-slate-400">{Number(ib?.ema200).toFixed(2)}</span>
                            </div>
                         </div>
                      </div>
@@ -544,20 +575,20 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
                          <div className="flex items-center gap-2 mb-4">
                             <Move className="w-4 h-4 text-indigo-400" />
-                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Context</span>
+                            <span className="text-xs font-black uppercase tracking-widest text-slate-400">Context</span>
                          </div>
                          <div className="space-y-4">
                             <div>
-                               <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1">Price vs IB</span>
-                               <span className="text-xs font-black uppercase text-white tracking-tight">{ib?.price_vs_ib?.replace(/_/g, ' ')}</span>
+                               <span className="text-xs text-slate-400 font-bold uppercase block mb-1">Price vs IB</span>
+                               <span className="text-sm font-black uppercase text-white tracking-tight">{ib?.price_vs_ib?.replace(/_/g, ' ')}</span>
                             </div>
                             <div>
-                               <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1">Price vs VWAP</span>
-                               <span className={`text-xs font-black uppercase tracking-tight ${ib?.price_vs_vwap === 'above' ? 'text-emerald-400' : 'text-rose-400'}`}>{ib?.price_vs_vwap}</span>
+                               <span className="text-xs text-slate-400 font-bold uppercase block mb-1">Price vs VWAP</span>
+                               <span className={`text-sm font-black uppercase tracking-tight ${ib?.price_vs_vwap === 'above' ? 'text-emerald-400' : 'text-rose-400'}`}>{ib?.price_vs_vwap}</span>
                             </div>
                             <div className="pt-3 border-t border-slate-800/50">
-                               <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1">Steps (10:30)</span>
-                               <span className={`text-sm font-mono font-black ${Number(intraday?.dpoc_migration?.steps_since_1030) > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                               <span className="text-xs text-slate-400 font-bold uppercase block mb-1">Steps (10:30)</span>
+                               <span className={`text-base font-mono font-black ${Number(intraday?.dpoc_migration?.steps_since_1030) > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                   {Number(intraday?.dpoc_migration?.steps_since_1030).toFixed(2)}
                                </span>
                             </div>
@@ -569,22 +600,22 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   {wicks && (
                     <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg">
                        <div className="flex items-center justify-between mb-5">
-                          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Wick Parade ({wicks.window_minutes || 60}m)</span>
+                          <span className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Wick Parade ({wicks.window_minutes || 60}m)</span>
                           <Zap className="w-5 h-5 text-amber-400" />
                        </div>
                        <div className="flex items-center gap-6 mb-5">
                           <div className="flex-1 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 flex flex-col items-center">
-                             <span className="text-[10px] font-black uppercase text-emerald-600 mb-1">Bullish</span>
-                             <span className="text-3xl font-black text-emerald-400">{wicks.bullish_wick_parade_count}</span>
+                             <span className="text-xs font-black uppercase text-emerald-600 mb-1">Bullish</span>
+                             <span className="text-4xl font-black text-emerald-400">{wicks.bullish_wick_parade_count}</span>
                           </div>
                           <div className="flex-1 bg-rose-500/5 border border-rose-500/20 rounded-2xl p-4 flex flex-col items-center">
-                             <span className="text-[10px] font-black uppercase text-rose-600 mb-1">Bearish</span>
-                             <span className="text-3xl font-black text-rose-400">{wicks.bearish_wick_parade_count}</span>
+                             <span className="text-xs font-black uppercase text-rose-600 mb-1">Bearish</span>
+                             <span className="text-4xl font-black text-rose-400">{wicks.bearish_wick_parade_count}</span>
                           </div>
                        </div>
                        {wicks.note && (
                           <div className="p-3 bg-slate-950/50 rounded-xl border border-slate-800/50">
-                             <p className="text-[10px] text-slate-500 font-mono leading-relaxed italic">"{wicks.note}"</p>
+                             <p className="text-xs text-slate-400 font-mono leading-relaxed italic">"{wicks.note}"</p>
                           </div>
                        )}
                     </div>
@@ -594,20 +625,20 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
                        <div className="flex items-center gap-2 mb-4">
                          <Zap className="w-4 h-4 text-amber-400" />
-                         <span className="text-[11px] font-black uppercase tracking-wider text-slate-300">Active FVGs</span>
+                         <span className="text-xs font-black uppercase tracking-wider text-slate-300">Active FVGs</span>
                       </div>
                       <div className="space-y-2">
                         {['1h_fvg', '15min_fvg', '5min_fvg'].map((key) => {
                              const list = (fvgs as any)?.[key] || [];
                              return (
                                  <div key={key} className="flex items-start gap-3 border-b border-slate-800/50 pb-2 last:border-0">
-                                    <span className="text-[10px] font-mono text-slate-500 w-12 shrink-0">{key.replace('_fvg', '').toUpperCase()}</span>
+                                    <span className="text-xs font-mono text-slate-400 w-16 shrink-0">{key.replace('_fvg', '').toUpperCase()}</span>
                                     <div className="flex-1 flex flex-wrap gap-1">
                                        {list.length > 0 ? list.map((f: any, i: number) => (
-                                           <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded border font-mono ${f.type === 'bullish' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                                           <span key={i} className={`text-[10px] px-2 py-0.5 rounded border font-mono ${f.type === 'bullish' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
                                               {f.bottom}-{f.top}
                                            </span>
-                                       )) : <span className="text-[9px] text-slate-700 italic">None</span>}
+                                       )) : <span className="text-xs text-slate-600 italic">None</span>}
                                     </div>
                                  </div>
                              );
@@ -621,8 +652,8 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                <div className="space-y-4 animate-in fade-in duration-500 pb-4">
                   {/* Regime Banner */}
                   <div className={`p-5 rounded-3xl border text-center ${getRegimeColor(dpocData?.dpoc_regime)}`}>
-                     <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 mb-2 block">DPOC Regime</span>
-                     <h2 className="text-lg font-black uppercase tracking-tight leading-none">
+                     <span className="text-xs font-black uppercase tracking-[0.3em] opacity-60 mb-2 block">DPOC Regime</span>
+                     <h2 className="text-xl font-black uppercase tracking-tight leading-none">
                        {dpocData?.dpoc_regime?.replace(/_/g, ' ') || 'ANALYZING...'}
                      </h2>
                   </div>
@@ -632,27 +663,27 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
                          <div className="flex items-center gap-2 mb-3">
                             <Route className="w-4 h-4 text-indigo-400" />
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Vector</span>
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-400">Vector</span>
                          </div>
                          <div className="space-y-3">
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500">Direction</span>
-                                <span className={`text-sm font-black uppercase ${
+                                <span className="text-xs text-slate-400">Direction</span>
+                                <span className={`text-base font-black uppercase ${
                                    dpocData?.direction === 'up' ? 'text-emerald-400' : dpocData?.direction === 'down' ? 'text-rose-400' : 'text-slate-300'
                                 }`}>{dpocData?.direction || 'FLAT'}</span>
                              </div>
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500">Net Mig.</span>
-                                <span className="text-sm font-mono font-black text-white">{dpocData?.net_migration_pts} pts</span>
+                                <span className="text-xs text-slate-400">Net Mig.</span>
+                                <span className="text-base font-mono font-black text-white">{dpocData?.net_migration_pts} pts</span>
                              </div>
                              <div className="h-px bg-slate-800/50" />
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500">Velocity (Avg)</span>
-                                <span className="text-xs font-mono font-bold text-slate-300">{dpocData?.avg_velocity_per_30min}</span>
+                                <span className="text-xs text-slate-400">Velocity (Avg)</span>
+                                <span className="text-sm font-mono font-bold text-slate-300">{dpocData?.avg_velocity_per_30min}</span>
                              </div>
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500">Velocity (Abs)</span>
-                                <span className="text-xs font-mono font-bold text-slate-300">{dpocData?.abs_velocity}</span>
+                                <span className="text-xs text-slate-400">Velocity (Abs)</span>
+                                <span className="text-sm font-mono font-bold text-slate-300">{dpocData?.abs_velocity}</span>
                              </div>
                          </div>
                      </div>
@@ -660,21 +691,21 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl">
                          <div className="flex items-center gap-2 mb-3">
                             <Gauge className="w-4 h-4 text-amber-400" />
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">Dynamics</span>
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-400">Dynamics</span>
                          </div>
                          <div className="space-y-3">
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500">Retain %</span>
-                                <span className="text-sm font-mono font-black text-white">{dpocData?.relative_retain_percent}%</span>
+                                <span className="text-xs text-slate-400">Retain %</span>
+                                <span className="text-base font-mono font-black text-white">{dpocData?.relative_retain_percent}%</span>
                              </div>
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500">Cluster Rng</span>
-                                <span className="text-xs font-mono font-bold text-slate-300">{dpocData?.cluster_range_last_4} pts</span>
+                                <span className="text-xs text-slate-400">Cluster Rng</span>
+                                <span className="text-sm font-mono font-bold text-slate-300">{dpocData?.cluster_range_last_4} pts</span>
                              </div>
                              <div className="h-px bg-slate-800/50" />
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-500">Price vs Cluster</span>
-                                <span className={`text-[10px] font-black uppercase ${
+                                <span className="text-xs text-slate-400">Price vs Cluster</span>
+                                <span className={`text-xs font-black uppercase ${
                                    dpocData?.price_vs_dpoc_cluster === 'above' ? 'text-emerald-400' : 
                                    dpocData?.price_vs_dpoc_cluster === 'below' ? 'text-rose-400' : 'text-slate-300'
                                 }`}>{dpocData?.price_vs_dpoc_cluster}</span>
@@ -685,7 +716,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
                   {/* Status Flags */}
                   <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl">
-                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 block mb-3">Signal State</span>
+                     <span className="text-xs font-black uppercase tracking-widest text-slate-400 block mb-3">Signal State</span>
                      <div className="flex flex-wrap gap-2">
                         <span className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase ${
                            dpocData?.accelerating ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-slate-900 text-slate-600 border-slate-800'
@@ -708,7 +739,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   {/* Note */}
                   {dpocData?.note && (
                      <div className="p-4 bg-slate-900/40 border border-slate-800 rounded-2xl">
-                        <p className="text-[10px] text-slate-400 italic leading-relaxed">"{dpocData.note}"</p>
+                        <p className="text-xs text-slate-400 italic leading-relaxed">"{dpocData.note}"</p>
                      </div>
                   )}
 
@@ -716,40 +747,40 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   {dpocHistory && dpocHistory.length > 0 && (
                       <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg mt-4">
                           <div className="flex items-center justify-between mb-4">
-                              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">DPOC History</span>
+                              <span className="text-xs font-black uppercase tracking-[0.3em] text-slate-400">DPOC History</span>
                               <History className="w-5 h-5 text-indigo-400" />
                           </div>
                           <div className="overflow-y-auto max-h-60 custom-scrollbar rounded-xl border border-slate-800/50">
                               <table className="w-full text-left">
                                   <thead className="bg-slate-950/50 sticky top-0 z-10 backdrop-blur-sm">
                                       <tr>
-                                          <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider">Slice</th>
-                                          <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider text-right">DPOC</th>
-                                          <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider text-right">Delta</th>
-                                          <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider text-center">Jump</th>
-                                          <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider text-center">Dev</th>
-                                          <th className="px-4 py-2 text-[9px] font-black uppercase text-slate-500 tracking-wider text-right">Bars</th>
+                                          <th className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider">Slice</th>
+                                          <th className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider text-right">DPOC</th>
+                                          <th className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider text-right">Delta</th>
+                                          <th className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider text-center">Jump</th>
+                                          <th className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider text-center">Dev</th>
+                                          <th className="px-4 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider text-right">Bars</th>
                                       </tr>
                                   </thead>
                                   <tbody className="divide-y divide-slate-800/30">
                                       {dpocHistory.map((row, idx) => (
                                           <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
-                                              <td className="px-4 py-2 text-[10px] font-mono font-bold text-slate-300">{row.slice}</td>
-                                              <td className="px-4 py-2 text-[10px] font-mono font-bold text-indigo-400 text-right">{row.dpoc.toFixed(2)}</td>
-                                              <td className={`px-4 py-2 text-[10px] font-mono font-bold text-right ${row.delta_pts > 0 ? 'text-emerald-400' : row.delta_pts < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                                              <td className="px-4 py-2 text-xs font-mono font-bold text-slate-300">{row.slice}</td>
+                                              <td className="px-4 py-2 text-xs font-mono font-bold text-indigo-400 text-right">{row.dpoc.toFixed(2)}</td>
+                                              <td className={`px-4 py-2 text-xs font-mono font-bold text-right ${row.delta_pts > 0 ? 'text-emerald-400' : row.delta_pts < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
                                                   {row.delta_pts !== 0 ? (row.delta_pts > 0 ? '+' : '') + row.delta_pts.toFixed(2) : '-'}
                                               </td>
                                               <td className="px-4 py-2 text-center">
-                                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${row.jump ? 'bg-amber-500/20 text-amber-400' : 'text-slate-600'}`}>
+                                                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${row.jump ? 'bg-amber-500/20 text-amber-400' : 'text-slate-600'}`}>
                                                       {row.jump ? 'YES' : '-'}
                                                   </span>
                                               </td>
                                               <td className="px-4 py-2 text-center">
-                                                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${row.developing ? 'bg-sky-500/20 text-sky-400' : 'text-slate-600'}`}>
+                                                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${row.developing ? 'bg-sky-500/20 text-sky-400' : 'text-slate-600'}`}>
                                                       {row.developing ? 'YES' : '-'}
                                                   </span>
                                               </td>
-                                              <td className="px-4 py-2 text-[10px] font-mono font-bold text-slate-400 text-right">{row.bar_count}</td>
+                                              <td className="px-4 py-2 text-xs font-mono font-bold text-slate-400 text-right">{row.bar_count}</td>
                                           </tr>
                                       ))}
                                   </tbody>
@@ -770,16 +801,16 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                     <div key={i} className={`border p-6 rounded-3xl flex items-center justify-between shadow-xl ${s.bg}`}>
                        <div className="flex items-center gap-3">
                           <Globe className={`w-4 h-4 ${s.color}`} />
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${s.color}`}>{s.label}</span>
+                          <span className={`text-xs font-black uppercase tracking-widest ${s.color}`}>{s.label}</span>
                        </div>
                        <div className="flex gap-8">
                           <div className="text-right">
-                             <span className="text-[8px] text-slate-500 uppercase block font-black mb-0.5">High</span>
-                             <span className="text-base font-mono font-black text-white">{Number(s.high).toFixed(2)}</span>
+                             <span className="text-[10px] text-slate-500 uppercase block font-black mb-0.5">High</span>
+                             <span className="text-lg font-mono font-black text-white">{Number(s.high).toFixed(2)}</span>
                           </div>
                           <div className="text-right">
-                             <span className="text-[8px] text-slate-500 uppercase block font-black mb-0.5">Low</span>
-                             <span className="text-base font-mono font-black text-white">{Number(s.low).toFixed(2)}</span>
+                             <span className="text-[10px] text-slate-500 uppercase block font-black mb-0.5">Low</span>
+                             <span className="text-lg font-mono font-black text-white">{Number(s.low).toFixed(2)}</span>
                           </div>
                        </div>
                     </div>
@@ -788,32 +819,32 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                   <div className="grid grid-cols-2 gap-4">
                       <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl shadow-lg relative overflow-hidden">
                           <div className="absolute top-0 right-0 p-3 opacity-10"><Globe className="w-12 h-12 text-slate-100" /></div>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-4 block">Previous Day</span>
+                          <span className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 block">Previous Day</span>
                           <div className="space-y-2">
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-400 font-bold">HIGH</span>
-                                <span className="text-sm font-mono font-black text-white">{Number(premarket?.previous_day_high).toFixed(2)}</span>
+                                <span className="text-xs text-slate-400 font-bold">HIGH</span>
+                                <span className="text-base font-mono font-black text-white">{Number(premarket?.previous_day_high).toFixed(2)}</span>
                              </div>
                              <div className="h-px bg-slate-800/50" />
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-400 font-bold">LOW</span>
-                                <span className="text-sm font-mono font-black text-white">{Number(premarket?.previous_day_low).toFixed(2)}</span>
+                                <span className="text-xs text-slate-400 font-bold">LOW</span>
+                                <span className="text-base font-mono font-black text-white">{Number(premarket?.previous_day_low).toFixed(2)}</span>
                              </div>
                           </div>
                       </div>
 
                       <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl shadow-lg relative overflow-hidden">
                           <div className="absolute top-0 right-0 p-3 opacity-10"><Globe className="w-12 h-12 text-slate-100" /></div>
-                          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-4 block">Previous Week</span>
+                          <span className="text-xs font-black uppercase tracking-widest text-slate-400 mb-4 block">Previous Week</span>
                           <div className="space-y-2">
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-400 font-bold">HIGH</span>
-                                <span className="text-sm font-mono font-black text-white">{Number(premarket?.previous_week_high).toFixed(2)}</span>
+                                <span className="text-xs text-slate-400 font-bold">HIGH</span>
+                                <span className="text-base font-mono font-black text-white">{Number(premarket?.previous_week_high).toFixed(2)}</span>
                              </div>
                              <div className="h-px bg-slate-800/50" />
                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] text-slate-400 font-bold">LOW</span>
-                                <span className="text-sm font-mono font-black text-white">{Number(premarket?.previous_week_low).toFixed(2)}</span>
+                                <span className="text-xs text-slate-400 font-bold">LOW</span>
+                                <span className="text-base font-mono font-black text-white">{Number(premarket?.previous_week_low).toFixed(2)}</span>
                              </div>
                           </div>
                       </div>
@@ -822,21 +853,21 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                    <div className="grid grid-cols-2 gap-4">
                      <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
                         <div>
-                           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Compression</span>
-                           <span className={`text-xs font-black uppercase tracking-wider ${premarket?.compression_flag ? 'text-amber-400' : 'text-slate-400'}`}>
+                           <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">Compression</span>
+                           <span className={`text-sm font-black uppercase tracking-wider ${premarket?.compression_flag ? 'text-amber-400' : 'text-slate-400'}`}>
                              {premarket?.compression_flag ? 'ACTIVE' : 'NONE'}
                            </span>
                         </div>
                         <div className="text-right">
-                           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Ratio</span>
-                           <span className="text-sm font-mono font-black text-white">{premarket?.compression_ratio}</span>
+                           <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">Ratio</span>
+                           <span className="text-base font-mono font-black text-white">{premarket?.compression_ratio}</span>
                         </div>
                      </div>
                      
                      <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl flex items-center justify-between">
                         <div>
-                           <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">SMT Divergence</span>
-                           <span className="text-xs font-black uppercase tracking-wider text-indigo-400">
+                           <span className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-1">SMT Divergence</span>
+                           <span className="text-sm font-black uppercase tracking-wider text-indigo-400">
                              {premarket?.smt_preopen || 'N/A'}
                            </span>
                         </div>
@@ -859,24 +890,24 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                            <Layers className="w-24 h-24" />
                         </div>
                         <div className="relative z-10">
-                           <h3 className={`text-[10px] font-black uppercase tracking-[0.3em] mb-5 ${section.color}`}>{section.title}</h3>
+                           <h3 className={`text-xs font-black uppercase tracking-[0.3em] mb-5 ${section.color}`}>{section.title}</h3>
                            <div className="grid grid-cols-3 gap-6 mb-6">
                               <div>
-                                 <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1">POC</span>
-                                 <span className="text-sm font-mono font-black text-white bg-slate-950/50 px-2 py-1 rounded-lg border border-slate-800/50 block w-fit">{Number(section.data?.poc).toFixed(2)}</span>
+                                 <span className="text-xs text-slate-400 font-bold uppercase block mb-1">POC</span>
+                                 <span className="text-lg font-mono font-black text-white bg-slate-950/50 px-2 py-1 rounded-lg border border-slate-800/50 block w-fit">{Number(section.data?.poc).toFixed(2)}</span>
                               </div>
                               <div>
-                                 <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1">VAH</span>
-                                 <span className="text-sm font-mono font-black text-slate-300 block">{Number(section.data?.vah).toFixed(2)}</span>
+                                 <span className="text-xs text-slate-400 font-bold uppercase block mb-1">VAH</span>
+                                 <span className="text-base font-mono font-black text-slate-300 block">{Number(section.data?.vah).toFixed(2)}</span>
                               </div>
                               <div>
-                                 <span className="text-[9px] text-slate-500 font-bold uppercase block mb-1">VAL</span>
-                                 <span className="text-sm font-mono font-black text-slate-300 block">{Number(section.data?.val).toFixed(2)}</span>
+                                 <span className="text-xs text-slate-400 font-bold uppercase block mb-1">VAL</span>
+                                 <span className="text-base font-mono font-black text-slate-300 block">{Number(section.data?.val).toFixed(2)}</span>
                               </div>
                            </div>
                            <div className="grid grid-cols-2 gap-4 border-t border-slate-800/50 pt-4">
                               <div>
-                                 <span className="text-[9px] text-emerald-500/70 font-black uppercase tracking-wider block mb-2">HVN Nodes</span>
+                                 <span className="text-xs text-emerald-500/70 font-black uppercase tracking-wider block mb-2">HVN Nodes</span>
                                  <div className="flex flex-wrap gap-1.5">
                                     {(section.data?.hvn_nodes || []).map((n, i) => (
                                        <span key={i} className="text-[10px] font-mono font-bold text-slate-300 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded">{n}</span>
@@ -884,7 +915,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                                  </div>
                               </div>
                               <div>
-                                 <span className="text-[9px] text-rose-500/70 font-black uppercase tracking-wider block mb-2">LVN Nodes</span>
+                                 <span className="text-xs text-rose-500/70 font-black uppercase tracking-wider block mb-2">LVN Nodes</span>
                                  <div className="flex flex-wrap gap-1.5">
                                     {(section.data?.lvn_nodes || []).map((n, i) => (
                                        <span key={i} className="text-[10px] font-mono font-bold text-slate-300 bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 rounded">{n}</span>
@@ -906,20 +937,20 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl shadow-lg relative overflow-hidden">
                         <div className="grid grid-cols-2 gap-4">
                            <div>
-                              <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1">Current POC</span>
+                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Current POC</span>
                               <span className="text-sm font-mono font-black text-white">{Number(tpo?.current_poc).toFixed(2)}</span>
                            </div>
                            <div>
-                              <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1">Shape</span>
+                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">Shape</span>
                               <span className="text-sm font-black text-indigo-400 uppercase">{tpo?.tpo_shape || "N/A"}</span>
                            </div>
                            <div className="col-span-2 pt-2 border-t border-slate-800/50 flex gap-4">
                               <div>
-                                 <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1">VAH</span>
+                                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">VAH</span>
                                  <span className="text-xs font-mono font-bold text-slate-300">{Number(tpo?.current_vah).toFixed(2)}</span>
                               </div>
                               <div>
-                                 <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest block mb-1">VAL</span>
+                                 <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest block mb-1">VAL</span>
                                  <span className="text-xs font-mono font-bold text-slate-300">{Number(tpo?.current_val).toFixed(2)}</span>
                               </div>
                            </div>
@@ -929,28 +960,28 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                      <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl shadow-lg">
                         <div className="grid grid-cols-2 gap-4 h-full">
                            <div className="flex flex-col justify-between">
-                              <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Single Prints</span>
+                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Single Prints</span>
                               <div className="space-y-1">
                                  <div className="flex justify-between">
-                                    <span className="text-[10px] text-slate-400">Above</span>
-                                    <span className="text-[10px] font-mono font-bold text-white">{tpo?.single_prints_above_vah || 0}</span>
+                                    <span className="text-xs text-slate-300">Above</span>
+                                    <span className="text-xs font-mono font-bold text-white">{tpo?.single_prints_above_vah || 0}</span>
                                  </div>
                                  <div className="flex justify-between">
-                                    <span className="text-[10px] text-slate-400">Below</span>
-                                    <span className="text-[10px] font-mono font-bold text-white">{tpo?.single_prints_below_val || 0}</span>
+                                    <span className="text-xs text-slate-300">Below</span>
+                                    <span className="text-xs font-mono font-bold text-white">{tpo?.single_prints_below_val || 0}</span>
                                  </div>
                               </div>
                            </div>
                            <div className="flex flex-col justify-between border-l border-slate-800 pl-4">
-                              <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Poor High/Low</span>
+                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Poor High/Low</span>
                               <div className="space-y-1">
                                  <div className="flex justify-between">
-                                    <span className="text-[10px] text-slate-400">High</span>
-                                    <span className={`text-[10px] font-mono font-bold ${tpo?.poor_high ? 'text-rose-400' : 'text-slate-600'}`}>{tpo?.poor_high ? 'YES' : 'NO'}</span>
+                                    <span className="text-xs text-slate-300">High</span>
+                                    <span className={`text-xs font-mono font-bold ${tpo?.poor_high ? 'text-rose-400' : 'text-slate-600'}`}>{tpo?.poor_high ? 'YES' : 'NO'}</span>
                                  </div>
                                  <div className="flex justify-between">
-                                    <span className="text-[10px] text-slate-400">Low</span>
-                                    <span className={`text-[10px] font-mono font-bold ${tpo?.poor_low ? 'text-rose-400' : 'text-slate-600'}`}>{tpo?.poor_low ? 'YES' : 'NO'}</span>
+                                    <span className="text-xs text-slate-300">Low</span>
+                                    <span className={`text-xs font-mono font-bold ${tpo?.poor_low ? 'text-rose-400' : 'text-slate-600'}`}>{tpo?.poor_low ? 'YES' : 'NO'}</span>
                                  </div>
                               </div>
                            </div>
@@ -973,10 +1004,10 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
             
             {activeTab === 'thinking' && (
                <div className="h-full space-y-4 animate-in fade-in duration-500 flex flex-col">
-                 <div className="bg-slate-900/80 border-l-4 border-indigo-600 border border-slate-800 rounded-3xl p-6 font-mono text-xs leading-relaxed text-slate-300 overflow-y-auto whitespace-pre-wrap shadow-2xl custom-scrollbar flex-1">
+                 <div className="bg-slate-900/80 border-l-4 border-indigo-600 border border-slate-800 rounded-3xl p-6 font-mono text-sm leading-relaxed text-slate-300 overflow-y-auto whitespace-pre-wrap shadow-2xl custom-scrollbar flex-1">
                    <div className="flex items-center gap-3 mb-5 text-indigo-400 border-b border-indigo-500/20 pb-4 sticky top-0 bg-slate-900/95 backdrop-blur-sm z-10">
                      <Brain className="w-4 h-4" />
-                     <span className="text-[9px] font-black uppercase tracking-[0.5em]">Neural Trace Path</span>
+                     <span className="text-xs font-black uppercase tracking-[0.5em]">Neural Trace Path</span>
                    </div>
                    {thinkingText}
                  </div>
