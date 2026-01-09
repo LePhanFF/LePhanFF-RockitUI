@@ -1,0 +1,269 @@
+
+import React, { useState } from 'react';
+import { MarketSnapshot } from '../types';
+import { GoogleGenAI } from "@google/genai";
+import { 
+  Rocket, 
+  AlertTriangle, 
+  FileText, 
+  Clock, 
+  Brain, 
+  Quote, 
+  FileJson,
+  CheckCircle2,
+  Terminal
+} from 'lucide-react';
+
+interface RockitAuditProps {
+  snapshots: MarketSnapshot[];
+}
+
+const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots }) => {
+  const [report, setReport] = useState<string>('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>('');
+
+  const generateRockitAnalysis = async () => {
+    if (!snapshots || snapshots.length === 0) {
+      setError("No session data available to analyze.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setReport('');
+    setStatus('Initializing ROCKIT Protocol...');
+
+    try {
+      // 1. Fetch Inference Logic
+      setStatus('Fetching Inference Logic (ROCKIT Knowledge Base)...');
+      let inferenceContext = "";
+      try {
+        const res = await fetch("https://storage.googleapis.com/rockit-data/inference/inference-json.md");
+        if (res.ok) {
+            inferenceContext = await res.text();
+        } else {
+            throw new Error(`Failed to load inference logic: ${res.status}`);
+        }
+      } catch (e: any) {
+        throw new Error(`Knowledge Base Connection Failed: ${e.message}`);
+      }
+
+      // 2. Prepare Data (Strictly Inputs, Ignoring existing outputs)
+      setStatus('Sanitizing Session Data inputs...');
+      const contextData = snapshots.map(s => ({
+        timestamp: s.input.current_et_time,
+        market_state: {
+            price: s.input.intraday.ib.current_close,
+            vwap_dist: s.input.intraday.ib.price_vs_vwap,
+            ib_status: s.input.intraday.ib.ib_status,
+            ib_location: s.input.intraday.ib.price_vs_ib
+        },
+        structure: {
+            dpoc: s.input.intraday.volume_profile.current_session.poc,
+            dpoc_migration: s.input.intraday.dpoc_migration.migration_direction,
+            tpo_shape: s.input.intraday.tpo_profile.tpo_shape,
+            single_prints: {
+                above: s.input.intraday.tpo_profile.single_prints_above_vah,
+                below: s.input.intraday.tpo_profile.single_prints_below_val
+            }
+        },
+        confluences: s.input.core_confluences
+      }));
+
+      // 3. Initialize Gemini
+      setStatus('Connecting to Neural Engine...');
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      // 4. Construct Prompt
+      const prompt = `
+        You are a Senior Trading Analyst utilizing the ROCKIT Market Profile Framework.
+        
+        Your task is to provide a "Second Opinion" TLDR Audit of the session based STRICTLY on the provided raw input data and the Reference Logic.
+        Ignore any prior analysis found in the source files. Re-evaluate the structure from scratch.
+
+        -----------------------------------------
+        REFERENCE LOGIC (THE RULES):
+        ${inferenceContext}
+        -----------------------------------------
+
+        SESSION DATA (TIME-SERIES):
+        ${JSON.stringify(contextData)}
+
+        -----------------------------------------
+        OUTPUT REQUIREMENTS:
+        Generate a Markdown report with the following specific sections:
+
+        ## 🚀 ROCKIT Second Opinion (TLDR)
+        - **Day Type Verdict:** Explicitly state the Day Type (e.g., Trend Day, Neutral Extreme) based on the Reference Logic rules.
+        - **The Morph:** Identify the specific time/event where the day "morphed" or confirmed its type.
+        - **Structural Validation:** Cite 2-3 specific data points (e.g., "DPOC migration > 20pts", "Single Prints > 100") that confirm this verdict.
+
+        ## 🔬 Structural Dissection
+        - **Auction Integrity:** Is the auction healthy or broken? (Reference TPO Shape/Single Prints).
+        - **Value Migration:** Analyze the DPOC movement vs Price. Are they aligned or divergent?
+        - **Trapped Traders:** Identify where the "Gotcha" moment occurred.
+
+        ## 🔮 Forward Watch
+        - **Key Level:** One price level to watch for the next session based on today's close.
+        - **Bias:** Bullish/Bearish/Neutral going forward.
+      `;
+
+      // 5. Call API
+      setStatus('Synthesizing Analysis...');
+      const responseStream = await ai.models.generateContentStream({
+        model: 'gemini-3-pro-preview',
+        contents: [
+            { role: 'user', parts: [{ text: prompt }] }
+        ],
+        config: {
+            temperature: 0.5, // Lower temperature for more analytical adherence
+        }
+      });
+
+      for await (const chunk of responseStream) {
+        const text = chunk.text;
+        if (text) {
+          setReport(prev => prev + text);
+        }
+      }
+
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Audit failed.");
+    } finally {
+      setLoading(false);
+      setStatus('');
+    }
+  };
+
+  // Simple Markdown Renderer
+  const renderMarkdown = (text: string) => {
+    return text.split('\n').map((line, i) => {
+      if (line.startsWith('## ')) {
+        return <h2 key={i} className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-300 mt-8 mb-4 uppercase tracking-widest flex items-center gap-2 border-b border-slate-800 pb-2"><Rocket className="w-5 h-5 text-emerald-400" />{line.replace('## ', '')}</h2>;
+      }
+      if (line.startsWith('### ')) {
+        return <h3 key={i} className="text-sm font-bold text-slate-200 mt-6 mb-2 uppercase tracking-wider bg-slate-800/50 p-2 rounded-lg border-l-2 border-emerald-500">{line.replace('### ', '')}</h3>;
+      }
+      if (line.trim().startsWith('- **')) {
+        const content = line.replace('- **', '').replace('**', ':');
+        const [title, ...rest] = content.split(':');
+        return (
+            <div key={i} className="flex gap-2 mb-2 ml-4">
+                <span className="text-slate-400 font-bold shrink-0">{title}:</span>
+                <span className="text-slate-300">{rest.join(':')}</span>
+            </div>
+        );
+      }
+      if (line.startsWith('- ')) {
+        return <li key={i} className="ml-6 list-disc text-slate-300 my-1">{line.replace('- ', '')}</li>;
+      }
+      if (line.trim() === '') return <br key={i} />;
+      
+      return <p key={i} className="text-slate-400 leading-relaxed mb-1">{line}</p>;
+    });
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-slate-900/40 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl relative">
+       {/* Background Grid */}
+       <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ 
+          backgroundImage: 'linear-gradient(#10b981 1px, transparent 1px), linear-gradient(90deg, #10b981 1px, transparent 1px)', 
+          backgroundSize: '40px 40px' 
+       }}></div>
+
+      {/* Header */}
+      <div className="p-6 border-b border-slate-800 bg-slate-900/60 shrink-0 flex items-center justify-between relative z-10">
+        <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                <Rocket className="w-6 h-6 text-emerald-400" />
+            </div>
+            <div>
+                <h2 className="text-sm font-black uppercase tracking-widest text-slate-200">ROCKIT Framework Audit</h2>
+                <p className="text-[10px] text-slate-500 font-mono">SECOND OPINION PROTOCOL • KNOWLEDGE BASE ACTIVE</p>
+            </div>
+        </div>
+
+        {!loading && (
+             <button 
+                onClick={generateRockitAnalysis}
+                className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] group"
+            >
+                <FileJson className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                <span>Run Logic</span>
+            </button>
+        )}
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-950/50 relative z-10">
+        
+        {/* Empty State */}
+        {!report && !loading && !error && (
+            <div className="h-full flex flex-col items-center justify-center opacity-40">
+                <Terminal className="w-24 h-24 text-slate-700 mb-6" />
+                <p className="text-sm font-black uppercase tracking-widest text-slate-600">Awaiting Sequence Start</p>
+                <div className="flex items-center gap-2 mt-4 text-[10px] text-slate-500 font-mono bg-slate-900 px-3 py-1 rounded-full border border-slate-800">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                    Knowledge Base Link Ready
+                </div>
+            </div>
+        )}
+
+        {/* Loading State */}
+        {loading && (
+            <div className="h-full flex flex-col items-center justify-center">
+                <div className="relative mb-8">
+                    <div className="w-24 h-24 border-4 border-slate-800 rounded-full"></div>
+                    <div className="absolute top-0 left-0 w-24 h-24 border-4 border-t-emerald-500 rounded-full animate-spin"></div>
+                    <Rocket className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-emerald-400 animate-bounce" />
+                </div>
+                <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400 animate-pulse">
+                    {status || 'Processing...'}
+                </p>
+                <div className="mt-4 flex flex-col items-center gap-1.5 w-64">
+                    <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-emerald-500 animate-progress-indeterminate"></div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+            <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-start gap-4">
+                <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0" />
+                <div>
+                    <h3 className="text-sm font-bold text-rose-400 uppercase tracking-wide">Protocol Failure</h3>
+                    <p className="text-xs text-rose-300/80 mt-1 font-mono">{error}</p>
+                </div>
+            </div>
+        )}
+
+        {/* Report Content */}
+        {report && (
+            <div className="max-w-4xl mx-auto space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                <div className="flex items-center gap-2 mb-8 opacity-50">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    <span className="text-[10px] font-mono text-emerald-500/70 uppercase">
+                        Analysis Complete • Generated by ROCKIT Logic
+                    </span>
+                </div>
+                
+                <div className="prose prose-invert prose-headings:font-black prose-p:text-slate-400 max-w-none">
+                    {renderMarkdown(report)}
+                </div>
+
+                <div className="mt-12 pt-8 border-t border-slate-800/50 flex items-center justify-center">
+                    <Quote className="w-6 h-6 text-slate-700" />
+                </div>
+            </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default RockitAudit;

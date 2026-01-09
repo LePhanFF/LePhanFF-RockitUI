@@ -31,12 +31,14 @@ import {
   Key,
   ChevronRight,
   User,
+  FileSearch,
+  Rocket,
   FileJson
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
 const GCS_BUCKET_BASE = "https://storage.googleapis.com/rockit-data"; 
-const REFRESH_INTERVAL_SEC = 120; 
+const REFRESH_INTERVAL_SEC = 30; 
 const ACCESS_CODE = "hello123";
 
 const hardenedClean = (raw: string): string => {
@@ -165,6 +167,12 @@ const App: React.FC = () => {
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   
+  // Ref to track selected file for async/interval closures to avoid stale state
+  const selectedFileRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedFileRef.current = selectedFile;
+  }, [selectedFile]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isListLoading, setIsListLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'error' | 'connecting'>('connecting');
@@ -217,74 +225,10 @@ const App: React.FC = () => {
     }
   };
 
-  const fetchFileList = async (isAutoRefresh = false) => {
-    if (!isAutoRefresh) setIsListLoading(true);
-    setErrorMsg(null);
-    
-    const listUrl = GCS_BUCKET_BASE;
-    setLastFetchUrl(listUrl);
-    setLastFetchStatus("Pending...");
-    if (!isAutoRefresh) addLog(`Fetching Bucket: ${listUrl}`);
-
-    try {
-      const res = await fetch(listUrl);
-      setLastFetchStatus(`${res.status} ${res.statusText}`);
-      
-      if (!res.ok) {
-        throw new Error(`Bucket Access Failed: ${res.status} ${res.statusText}`);
-      }
-
-      const text = await res.text();
-      
-      if (text.trim().startsWith("<!DOCTYPE html") || text.includes("<html")) {
-        addLog("WARN: Response appears to be HTML (Auth/UI page?)");
-      }
-
-      const files: string[] = [];
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(text, "text/xml");
-      const contents = xmlDoc.getElementsByTagName("Contents");
-      
-      for (let i = 0; i < contents.length; i++) {
-        const key = contents[i].getElementsByTagName("Key")[0]?.textContent;
-        if (key && (key.endsWith('.json') || key.endsWith('.jsonl')) && !key.endsWith('/')) {
-           files.push(key);
-        }
-      }
-
-      files.sort().reverse();
-      
-      if (files.length === 0) {
-        if (contents.length === 0 && (text.includes("<html") || text.includes("<!DOCTYPE"))) {
-           throw new Error("Received HTML instead of XML bucket listing.");
-        }
-        throw new Error("No .json/.jsonl files found in bucket.");
-      }
-
-      setAvailableFiles(files);
-      setConnectionStatus('connected');
-      
-      if (!selectedFile && files.length > 0) {
-        handleFileSelect(files[0], true);
-      }
-
-    } catch (err: any) {
-      if (!isAutoRefresh) addLog(`ERROR: ${err.message}`);
-      
-      let displayMsg = err.message || "Failed to list bucket contents";
-      if (displayMsg === "Failed to fetch") {
-        displayMsg = "CORS/Network Error. Bucket likely blocks this origin.";
-      }
-
-      setConnectionStatus('error');
-      setErrorMsg(displayMsg);
-    } finally {
-      if (!isAutoRefresh) setIsListLoading(false);
-    }
-  };
-
   const handleFileSelect = async (fileName: string, isUpdate = false) => {
-    setSelectedFile(fileName);
+    // If not an update (e.g. user clicking new file), update state immediately
+    if (!isUpdate) setSelectedFile(fileName);
+    
     setIsLoading(true);
     
     const cleanBase = GCS_BUCKET_BASE.replace(/\/$/, '');
@@ -333,6 +277,7 @@ const App: React.FC = () => {
         }
 
         setSnapshots(newSnapshots);
+        // Only auto-scroll if we were already at the end or if it's a fresh file load (not just a refresh)
         if (isUpdate || autoScrollEnabled.current) {
           setSelectedIndex(newSnapshots.length - 1);
         }
@@ -345,6 +290,80 @@ const App: React.FC = () => {
       setErrorMsg(`Failed to load: ${err.message}`);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchFileList = async (isAutoRefresh = false) => {
+    if (!isAutoRefresh) setIsListLoading(true);
+    setErrorMsg(null);
+    
+    const listUrl = GCS_BUCKET_BASE;
+    setLastFetchUrl(listUrl);
+    setLastFetchStatus("Pending...");
+    if (!isAutoRefresh) addLog(`Fetching Bucket: ${listUrl}`);
+
+    try {
+      const res = await fetch(listUrl);
+      setLastFetchStatus(`${res.status} ${res.statusText}`);
+      
+      if (!res.ok) {
+        throw new Error(`Bucket Access Failed: ${res.status} ${res.statusText}`);
+      }
+
+      const text = await res.text();
+      
+      if (text.trim().startsWith("<!DOCTYPE html") || text.includes("<html")) {
+        addLog("WARN: Response appears to be HTML (Auth/UI page?)");
+      }
+
+      const files: string[] = [];
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(text, "text/xml");
+      const contents = xmlDoc.getElementsByTagName("Contents");
+      
+      for (let i = 0; i < contents.length; i++) {
+        const key = contents[i].getElementsByTagName("Key")[0]?.textContent;
+        if (key && (key.endsWith('.json') || key.endsWith('.jsonl')) && !key.endsWith('/')) {
+           files.push(key);
+        }
+      }
+
+      files.sort().reverse();
+      
+      if (files.length === 0) {
+        if (contents.length === 0 && (text.includes("<html") || text.includes("<!DOCTYPE"))) {
+           throw new Error("Received HTML instead of XML bucket listing.");
+        }
+        throw new Error("No .json/.jsonl files found in bucket.");
+      }
+
+      setAvailableFiles(files);
+      setConnectionStatus('connected');
+      
+      // Check current file from ref to ensure we use latest state inside this closure
+      const currentFile = selectedFileRef.current;
+      
+      if (!currentFile && files.length > 0) {
+        // First load
+        handleFileSelect(files[0], true);
+        setSelectedFile(files[0]);
+      } else if (currentFile) {
+        // Refresh currently active file
+        handleFileSelect(currentFile, true);
+      }
+
+    } catch (err: any) {
+      if (!isAutoRefresh) addLog(`ERROR: ${err.message}`);
+      
+      let displayMsg = err.message || "Failed to list bucket contents";
+      if (displayMsg === "Failed to fetch") {
+        displayMsg = "CORS/Network Error. Bucket likely blocks this origin.";
+      }
+
+      setConnectionStatus('error');
+      setErrorMsg(displayMsg);
+    } finally {
+      if (!isAutoRefresh) setIsListLoading(false);
     }
   };
 
@@ -521,6 +540,10 @@ const App: React.FC = () => {
                 <TabButton id="profile" label="Profile" icon={BarChartHorizontal} />
                 <TabButton id="tpo" label="TPO" icon={Grid3X3} />
                 {thinkingText && <TabButton id="thinking" label="Think" icon={Brain} />}
+                {/* NEW AUDIT TABS */}
+                <div className="w-px h-6 bg-slate-800/50 mx-1"></div>
+                <TabButton id="audit" label="Audit" icon={FileSearch} />
+                <TabButton id="rk-audit" label="RK Audit" icon={Rocket} />
                 <TabButton id="json" label="JSON" icon={FileJson} />
              </div>
 
