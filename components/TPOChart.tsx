@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
-import { Grid, Info, AlertTriangle, ArrowUpFromLine, ArrowDownFromLine } from 'lucide-react';
+import { Grid, Info, AlertTriangle, ArrowUpFromLine, ArrowDownFromLine, Fingerprint } from 'lucide-react';
 
 interface TPOChartProps {
   tpoProfile: {
@@ -60,6 +60,11 @@ const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, sessionH
     return Math.floor(diff / 30);
   }, [currentTime]);
 
+  const getPeriodLetter = (index: number) => {
+    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    return alphabet[index % alphabet.length];
+  };
+
   const getHeatmapColor = (periodIndex: number, isPOC: boolean, isVA: boolean) => {
     // Current Period (Active Auction)
     if (periodIndex === currentPeriodIndex) {
@@ -94,12 +99,9 @@ const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, sessionH
     
     // IMPORTANT: The row width cannot physically exceed the number of periods that have occurred
     // We add 1 because Period 0 (A) has width 1.
-    // However, price can visit a level multiple times in one period, but TPO counts 1 letter per period.
-    // So max distinct TPO blocks = number of periods passed + 1
     const timeConstrainedMax = currentPeriodIndex + 1;
 
     // Simulation logic:
-    // If we are early in the day (e.g. Period B, index 1), max width is 2.
     // We clamp the ideal width to the time constraint.
     let width = Math.min(idealWidth, timeConstrainedMax);
     
@@ -111,20 +113,8 @@ const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, sessionH
     const blocks = [];
     
     // Generate blocks
-    // To show "Recent Acceptance", we want the letters to reflect distinct time periods.
-    // In a real profile, prints are specific. Here we simulate.
-    // If width is 3 and current period is 5 (F): 
-    // We could have prints A, C, F.
-    // To emphasize recent acceptance, we'll bias towards including the current period index 
-    // if the ideal width was high (meaning high volume/activity).
-    
-    // Logic: Fill from latest backwards
+    // Logic: Fill from latest backwards so blocks[last] is the LATEST period
     for(let i=0; i<width; i++) {
-        // We simulate that the 'latest' print is the current period, 
-        // and previous prints were recent.
-        // This visualizes the "recent acceptance" user asked for.
-        // We offset by 'i' to go back in time.
-        
         let period = currentPeriodIndex - i;
         if (period < 0) period = 0; // Cap at A
 
@@ -241,6 +231,14 @@ const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, sessionH
                         const isSellingTail = isSessionHigh && rawWidth <= 2 && !isPoorHigh;
                         const isBuyingTail = isSessionLow && rawWidth <= 2 && !isPoorLow;
 
+                        // Single Prints: Width is 1 and NOT at the session extremes
+                        const isSinglePrint = rawWidth === 1 && !isSessionHigh && !isSessionLow;
+
+                        // GET FIRST PERIOD (First Appeared)
+                        // blocks[0] is the earliest period because we unshifted during generation
+                        const firstBlock = blocks.length > 0 ? blocks[0] : null;
+                        const periodLetter = firstBlock ? getPeriodLetter(firstBlock.period) : '?';
+
                         return (
                             <div 
                               key={price} 
@@ -276,30 +274,36 @@ const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, sessionH
                                         ))}
                                     </div>
                                     
-                                    {/* Structural Markers */}
+                                    {/* Structural Markers with Time Slice Removed */}
                                     <div className="ml-6 flex items-center gap-3 opacity-100 z-20">
                                         {isPoorHigh && (
                                             <div className="flex items-center gap-1.5 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.3)]">
                                                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                                                <span className="text-[10px] font-black text-rose-300 uppercase tracking-wide">Poor High</span>
+                                                <span className="text-[10px] font-black text-rose-300 uppercase tracking-wide">Poor High [{periodLetter}]</span>
                                             </div>
                                         )}
                                         {isPoorLow && (
                                             <div className="flex items-center gap-1.5 bg-rose-500/20 px-2 py-0.5 rounded border border-rose-500/40 shadow-[0_0_10px_rgba(244,63,94,0.3)]">
                                                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
-                                                <span className="text-[10px] font-black text-rose-300 uppercase tracking-wide">Poor Low</span>
+                                                <span className="text-[10px] font-black text-rose-300 uppercase tracking-wide">Poor Low [{periodLetter}]</span>
                                             </div>
                                         )}
                                         {isSellingTail && (
                                             <div className="flex items-center gap-1.5 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/40">
                                                 <ArrowUpFromLine className="w-3.5 h-3.5 text-indigo-400" />
-                                                <span className="text-[10px] font-black text-indigo-300 uppercase tracking-wide">Selling Tail</span>
+                                                <span className="text-[10px] font-black text-indigo-300 uppercase tracking-wide">Selling Tail [{periodLetter}]</span>
                                             </div>
                                         )}
                                         {isBuyingTail && (
                                             <div className="flex items-center gap-1.5 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/40">
                                                 <ArrowDownFromLine className="w-3.5 h-3.5 text-indigo-400" />
-                                                <span className="text-[10px] font-black text-indigo-300 uppercase tracking-wide">Buying Tail</span>
+                                                <span className="text-[10px] font-black text-indigo-300 uppercase tracking-wide">Buying Tail [{periodLetter}]</span>
+                                            </div>
+                                        )}
+                                        {isSinglePrint && (
+                                            <div className="flex items-center gap-1.5 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/30">
+                                                <Fingerprint className="w-3.5 h-3.5 text-sky-400" />
+                                                <span className="text-[10px] font-black text-sky-300 uppercase tracking-wide">Single Print [{periodLetter}]</span>
                                             </div>
                                         )}
                                     </div>
