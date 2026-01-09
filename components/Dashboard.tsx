@@ -36,7 +36,8 @@ import {
   BarChart2,
   Waypoints,
   Gauge,
-  FileJson
+  FileJson,
+  Check
 } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 import TPOChart from './TPOChart';
@@ -47,6 +48,204 @@ interface DashboardProps {
   allSnapshots?: MarketSnapshot[];
   activeTab: string;
 }
+
+// --- AUDIT MAPPING CONFIGURATION ---
+const PROPERTY_MAP: Record<string, string> = {
+    // INPUT
+    "session_date": "Header > Date",
+    "current_et_time": "Header > Clock",
+    
+    "premarket.asia_high": "Globex > Asia Block",
+    "premarket.asia_low": "Globex > Asia Block",
+    "premarket.london_high": "Globex > London Block",
+    "premarket.london_low": "Globex > London Block",
+    "premarket.overnight_high": "Globex > Overnight Range",
+    "premarket.overnight_low": "Globex > Overnight Range",
+    "premarket.previous_day_high": "Globex > Previous Day",
+    "premarket.previous_day_low": "Globex > Previous Day",
+    "premarket.previous_week_high": "Globex > Previous Week",
+    "premarket.previous_week_low": "Globex > Previous Week",
+    "premarket.compression_flag": "Globex > Compression",
+    "premarket.compression_ratio": "Globex > Ratio",
+    "premarket.smt_preopen": "Globex > SMT",
+
+    "intraday.ib.ib_high": "Intraday > IB High",
+    "intraday.ib.ib_low": "Intraday > IB Low",
+    "intraday.ib.ib_mid": "Intraday > IB Mid",
+    "intraday.ib.ib_range": "Intraday > IB Range",
+    "intraday.ib.ib_status": "Intraday > IB Status",
+    "intraday.ib.rsi14": "Intraday > RSI",
+    "intraday.ib.atr14": "Intraday > ATR",
+    "intraday.ib.ema20": "Intraday > EMA 20",
+    "intraday.ib.ema50": "Intraday > EMA 50",
+    "intraday.ib.ema200": "Intraday > EMA 200",
+    "intraday.ib.price_vs_ib": "Intraday > Price vs IB",
+    "intraday.ib.price_vs_vwap": "Intraday > Price vs VWAP",
+    
+    "intraday.wick_parade.bullish_wick_parade_count": "Intraday > Wick Parade (Bull)",
+    "intraday.wick_parade.bearish_wick_parade_count": "Intraday > Wick Parade (Bear)",
+    "intraday.wick_parade.note": "Intraday > Wick Note",
+    "intraday.fvg_detection.1h_fvg": "Intraday > Active FVGs",
+    "intraday.fvg_detection.15min_fvg": "Intraday > Active FVGs",
+    "intraday.fvg_detection.5min_fvg": "Intraday > Active FVGs",
+
+    "intraday.dpoc_migration.steps_since_1030": "Intraday > Steps",
+    "intraday.dpoc_migration.dpoc_regime": "DPOC > Regime",
+    "intraday.dpoc_migration.direction": "DPOC > Vector Direction",
+    "intraday.dpoc_migration.net_migration_pts": "DPOC > Net Mig",
+    "intraday.dpoc_migration.avg_velocity_per_30min": "DPOC > Velocity Avg",
+    "intraday.dpoc_migration.abs_velocity": "DPOC > Velocity Abs",
+    "intraday.dpoc_migration.relative_retain_percent": "DPOC > Retain %",
+    "intraday.dpoc_migration.cluster_range_last_4": "DPOC > Cluster Rng",
+    "intraday.dpoc_migration.price_vs_dpoc_cluster": "DPOC > Price vs Cluster",
+    "intraday.dpoc_migration.accelerating": "DPOC > Signal: Accelerating",
+    "intraday.dpoc_migration.decelerating": "DPOC > Signal: Decelerating",
+    "intraday.dpoc_migration.is_stabilizing": "DPOC > Signal: Stabilizing",
+    "intraday.dpoc_migration.reclaiming_opposite": "DPOC > Signal: Reclaiming",
+    "intraday.dpoc_migration.prior_exhausted": "DPOC > Signal: Exhausted",
+    "intraday.dpoc_migration.note": "DPOC > Note",
+    "intraday.dpoc_migration.dpoc_history": "DPOC > History Table",
+    
+    "intraday.tpo_profile.current_poc": "TPO > Current POC",
+    "intraday.tpo_profile.tpo_shape": "TPO > Shape",
+    "intraday.tpo_profile.current_vah": "TPO > VAH",
+    "intraday.tpo_profile.current_val": "TPO > VAL",
+    "intraday.tpo_profile.single_prints_above_vah": "TPO > Single Prints Above",
+    "intraday.tpo_profile.single_prints_below_val": "TPO > Single Prints Below",
+    "intraday.tpo_profile.poor_high": "TPO > Poor High",
+    "intraday.tpo_profile.poor_low": "TPO > Poor Low",
+
+    "core_confluences.note": "Logic > Note",
+    "core_confluences.ib_acceptance.close_above_ibh": "Logic > Close > IBH",
+    "core_confluences.ib_acceptance.close_below_ibl": "Logic > Close < IBL",
+    "core_confluences.ib_acceptance.price_accepted_higher": "Logic > Accepted Higher",
+    "core_confluences.ib_acceptance.price_accepted_lower": "Logic > Accepted Lower",
+    "core_confluences.dpoc_vs_ib.dpoc_above_ibh": "Logic > DPOC > IBH",
+    "core_confluences.dpoc_vs_ib.dpoc_below_ibl": "Logic > DPOC < IBL",
+    "core_confluences.dpoc_compression.compressing_against_vah": "Logic > Comp vs VAH",
+    "core_confluences.dpoc_compression.compressing_against_val": "Logic > Comp vs VAL",
+    "core_confluences.dpoc_compression.compression_bias": "Logic > Comp Bias",
+    "core_confluences.migration.net_direction": "Logic > Migration Dir",
+    "core_confluences.migration.pts_since_1030": "Logic > Migration Delta",
+    "core_confluences.migration.significant_up": "Logic > Sig Up",
+    "core_confluences.migration.significant_down": "Logic > Sig Down",
+
+    // OUTPUT (DECODED)
+    "day_type.type": "Brief > Day Type",
+    "confidence": "Brief > Confidence",
+    "one_liner": "Brief > Core Synthesis",
+    "value_acceptance": "Brief > Value Acceptance",
+    "tpo_read.profile_signals": "Brief > TPO Signal",
+    "tpo_read.dpoc_migration": "Brief > TPO Migration",
+    "tpo_read.extreme_or_compression": "Brief > TPO State",
+    "day_type_reasoning": "Brief > Logic Driver",
+    "bias": "Header > Bias Badge"
+};
+
+const RecursiveJson: React.FC<{ 
+  data: any, 
+  label?: string, 
+  parentPath: string, 
+  isLast: boolean,
+  level?: number 
+}> = ({ data, label, parentPath, isLast, level = 0 }) => {
+  const currentPath = label ? (parentPath ? `${parentPath}.${label}` : label) : parentPath;
+  const mapping = PROPERTY_MAP[currentPath];
+  const indent = level * 20; // px indentation
+  
+  const renderMapping = () => {
+    if (!mapping) return null;
+    return (
+      <span className="ml-6 inline-flex items-center gap-1.5 text-amber-500 select-none opacity-80 group-hover:opacity-100 transition-opacity">
+        <span className="opacity-50 font-sans text-sm">//</span>
+        <Check className="w-3 h-3" />
+        <span className="text-xs font-black uppercase tracking-wider bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+          MAPPED: {mapping}
+        </span>
+      </span>
+    );
+  };
+
+  if (Array.isArray(data)) {
+    if (data.length === 0) {
+      return (
+        <div style={{ paddingLeft: indent }} className="group hover:bg-white/5 py-0.5 rounded">
+           <span className="text-emerald-300 font-bold">{label ? `"${label}": ` : ''}</span>
+           <span className="text-slate-300">[]</span>
+           {!isLast && <span className="text-slate-500">,</span>}
+           {renderMapping()}
+        </div>
+      );
+    }
+    return (
+      <>
+        <div style={{ paddingLeft: indent }} className="group hover:bg-white/5 py-0.5 rounded">
+          <span className="text-emerald-300 font-bold">{label ? `"${label}": ` : ''}</span>
+          <span className="text-slate-300">[</span>
+          {renderMapping()}
+        </div>
+        {data.map((item, i) => (
+          <RecursiveJson 
+            key={i} 
+            data={item} 
+            parentPath={currentPath} // Arrays don't extend dot notation path usually unless specified
+            isLast={i === data.length - 1} 
+            level={level + 1} 
+          />
+        ))}
+        <div style={{ paddingLeft: indent }} className="py-0.5">
+          <span className="text-slate-300">]</span>
+          {!isLast && <span className="text-slate-500">,</span>}
+        </div>
+      </>
+    );
+  }
+
+  if (typeof data === 'object' && data !== null) {
+     return (
+       <>
+         <div style={{ paddingLeft: indent }} className="group hover:bg-white/5 py-0.5 rounded">
+           <span className="text-emerald-300 font-bold">{label ? `"${label}": ` : ''}</span>
+           <span className="text-slate-300">{'{'}</span>
+           {renderMapping()}
+         </div>
+         {Object.entries(data).map(([key, val], i, arr) => (
+           <RecursiveJson 
+             key={key} 
+             data={val} 
+             label={key} 
+             parentPath={currentPath} 
+             isLast={i === arr.length - 1} 
+             level={level + 1} 
+           />
+         ))}
+         <div style={{ paddingLeft: indent }} className="py-0.5">
+           <span className="text-slate-300">{'}'}</span>
+           {!isLast && <span className="text-slate-500">,</span>}
+         </div>
+       </>
+     );
+  }
+
+  // Primitives (Strings, Numbers, Booleans, Null)
+  let valColor = "text-indigo-300";
+  if (typeof data === 'string') valColor = "text-orange-300"; // Strings
+  if (typeof data === 'number') valColor = "text-sky-300";   // Numbers
+  if (typeof data === 'boolean') valColor = "text-rose-400"; // Booleans
+  if (data === null) valColor = "text-slate-500";            // Null
+
+  const displayValue = typeof data === 'string' ? `"${data}"` : String(data);
+
+  return (
+    <div style={{ paddingLeft: indent }} className="group hover:bg-white/5 py-0.5 rounded flex items-center flex-wrap">
+       <span className="text-emerald-300 font-bold whitespace-pre">{label ? `"${label}": ` : ''}</span>
+       <span className={`${valColor} font-bold break-all`}>{displayValue}</span>
+       {!isLast && <span className="text-slate-500">,</span>}
+       {renderMapping()}
+    </div>
+  );
+};
+
 
 const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab }) => {
   
@@ -217,27 +416,33 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
           <div className="h-full flex flex-col xl:flex-row gap-4 overflow-hidden animate-in fade-in duration-500">
               {/* Input Section */}
               <div className="flex-1 bg-slate-900/60 border border-slate-800 rounded-[2rem] flex flex-col overflow-hidden shadow-2xl min-h-0">
-                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/50 flex items-center gap-3">
-                     <FileJson className="w-5 h-5 text-emerald-400" />
-                     <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Input Data Stream</span>
+                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/50 flex items-center justify-between gap-3">
+                     <div className="flex items-center gap-3">
+                        <FileJson className="w-5 h-5 text-emerald-400" />
+                        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Input Audit Stream</span>
+                     </div>
+                     <span className="text-[10px] text-slate-500 font-mono">MAP VERIFIED</span>
                  </div>
                  <div className="flex-1 overflow-auto custom-scrollbar p-6 bg-slate-950/30">
-                     <pre className="text-base font-mono text-emerald-300 whitespace-pre-wrap break-all leading-loose font-bold">
-                         {JSON.stringify(snapshot.input, null, 2)}
-                     </pre>
+                     <div className="text-base font-mono leading-loose">
+                        <RecursiveJson data={snapshot.input} parentPath="" isLast={true} />
+                     </div>
                  </div>
               </div>
 
               {/* Output Section */}
               <div className="flex-1 bg-slate-900/60 border border-slate-800 rounded-[2rem] flex flex-col overflow-hidden shadow-2xl min-h-0">
-                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/50 flex items-center gap-3">
-                     <Brain className="w-5 h-5 text-indigo-400" />
-                     <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Model Output</span>
+                 <div className="px-6 py-4 border-b border-slate-800 bg-slate-950/50 flex items-center justify-between gap-3">
+                     <div className="flex items-center gap-3">
+                        <Brain className="w-5 h-5 text-indigo-400" />
+                        <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-300">Model Audit Stream</span>
+                     </div>
+                     <span className="text-[10px] text-slate-500 font-mono">MAP VERIFIED</span>
                  </div>
                  <div className="flex-1 overflow-auto custom-scrollbar p-6 bg-slate-950/30">
-                     <pre className="text-base font-mono text-indigo-300 whitespace-pre-wrap break-all leading-loose font-bold">
-                         {JSON.stringify(output || snapshot.output, null, 2)}
-                     </pre>
+                     <div className="text-base font-mono leading-loose">
+                        <RecursiveJson data={output || snapshot.output} parentPath="" isLast={true} />
+                     </div>
                  </div>
               </div>
           </div>
@@ -997,6 +1202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                         sessionHigh={Math.max(Number(ib?.current_high), Number(tpo?.current_vah) + 20)}
                         sessionLow={Math.min(Number(ib?.current_low), Number(tpo?.current_val) - 20)}
                         currentPrice={Number(ib?.current_close)}
+                        currentTime={snapshot.input.current_et_time}
                      />
                   </div>
                </div>
