@@ -8,7 +8,6 @@ import {
   Cloud, 
   RefreshCw, 
   Timer,
-  Server,
   AlertCircle,
   Cpu,
   FileText,
@@ -16,7 +15,16 @@ import {
   TerminalSquare,
   Activity,
   Network,
-  Pause
+  Pause,
+  Info,
+  Waypoints,
+  Globe,
+  BarChartHorizontal,
+  Grid3X3,
+  Brain,
+  ArrowUpRight,
+  ArrowDownRight,
+  Target
 } from 'lucide-react';
 
 // Public GCS Bucket
@@ -79,11 +87,40 @@ const App: React.FC = () => {
   const [lastFetchUrl, setLastFetchUrl] = useState<string>("");
   const [lastFetchStatus, setLastFetchStatus] = useState<string>("");
 
+  // Navigation State
+  const [activeTab, setActiveTab] = useState<string>('brief');
+
   const autoScrollEnabled = useRef(true);
+  const lastLatestTimeRef = useRef<string | null>(null);
 
   const addLog = (msg: string) => {
     console.log(`[ROCKIT] ${msg}`);
     setLogs(prev => [`> ${msg}`, ...prev].slice(0, 10));
+  };
+
+  const playUpdateSound = () => {
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+      
+      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {
+      console.error("Audio error", e);
+    }
   };
 
   const fetchFileList = async (isAutoRefresh = false) => {
@@ -192,6 +229,15 @@ const App: React.FC = () => {
       addLog(`Records Parsed: ${newSnapshots.length}`);
 
       if (newSnapshots.length > 0) {
+        // Detect new data for sound notification
+        const latestItem = newSnapshots[newSnapshots.length - 1];
+        const latestTime = latestItem?.input?.current_et_time;
+
+        if (latestTime && latestTime !== lastLatestTimeRef.current) {
+            playUpdateSound();
+            lastLatestTimeRef.current = latestTime;
+        }
+
         setSnapshots(newSnapshots);
         if (isUpdate || autoScrollEnabled.current) {
           setSelectedIndex(newSnapshots.length - 1);
@@ -277,52 +323,140 @@ const App: React.FC = () => {
 
   const currentSnapshot = processedSnapshots[selectedIndex] || null;
 
+  // Header Banner Derived Values
+  const bias = (currentSnapshot?.decoded?.bias || 'NEUTRAL').toUpperCase();
+  const narrative = currentSnapshot?.decoded?.one_liner || "Initializing Protocol...";
+  const isLong = bias.includes('LONG');
+  const isShort = bias.includes('SHORT');
+  
+  const thinkingText = currentSnapshot?.decoded?.thinking || 
+  currentSnapshot?.decoded?.thinking || 
+  (typeof currentSnapshot?.output === 'string' && currentSnapshot.output.includes('<think>') 
+    ? currentSnapshot.output.split('<think>')[1].split('</think>')[0] 
+    : null);
+
+  const TabButton = ({ id, label, icon: Icon }: { id: string, label: string, icon: any }) => (
+    <button onClick={() => setActiveTab(id)}
+      className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-lg transition-all border min-w-[50px] ${
+        activeTab === id 
+          ? 'bg-white text-slate-950 border-white shadow-xl transform scale-105 z-10' 
+          : 'bg-black/20 text-slate-400 border-transparent hover:bg-black/40 hover:text-slate-200'
+      }`}>
+      <Icon className="w-3.5 h-3.5" />
+      <span className="text-[8px] font-black uppercase tracking-wider">{label}</span>
+    </button>
+  );
+
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-950 text-slate-200 overflow-hidden font-sans select-none antialiased relative">
       {/* Header */}
-      <header className="shrink-0 bg-slate-900/95 border-b border-slate-800 px-6 py-4 flex items-center justify-between shadow-2xl backdrop-blur-xl z-[100]">
-        <div className="flex items-center gap-5">
-          <div className="p-2.5 bg-indigo-600 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] border border-indigo-400/20">
-            <LayoutDashboard className="w-6 h-6 text-white" />
+      <header className="shrink-0 bg-slate-900/95 border-b border-slate-800 px-4 py-2 flex items-center justify-between shadow-2xl backdrop-blur-xl z-[100] h-20">
+        
+        {/* Left: Brand & Controls */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="p-2 bg-indigo-600 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] border border-indigo-400/20">
+            <LayoutDashboard className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h1 className="text-xl font-black tracking-tighter text-white uppercase italic leading-none">ROCKIT <span className="text-indigo-400 not-italic">ENGINE</span></h1>
-            <div className="flex items-center gap-3 mt-1.5">
-              <div className={`flex items-center gap-1.5 px-2 py-0.5 border rounded text-[8px] font-black uppercase tracking-[0.2em] ${
-                connectionStatus === 'connected' ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-400' : 
-                connectionStatus === 'error' ? 'bg-rose-500/20 border-rose-500/30 text-rose-400' :
-                'bg-amber-500/10 border-amber-500/20 text-amber-400'
-              }`}>
-                <Server className="w-2.5 h-2.5" />
-                {connectionStatus === 'connected' ? 'GCS: LIVE' : connectionStatus === 'error' ? 'GCS: ERROR' : 'GCS: INIT'}
-              </div>
-              <button 
-                onClick={() => setIsPaused(!isPaused)}
-                className={`text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors ${
-                  isPaused ? 'text-amber-400 animate-pulse' : 'text-slate-500 hover:text-indigo-400'
-                }`}
-                title={isPaused ? "Resume Auto-Refresh" : "Pause Auto-Refresh"}
-              >
-                {isPaused ? <Pause className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
-                {isPaused ? 'PAUSED' : `${countdown}S`}
-              </button>
+          <div className="flex flex-col">
+            <h1 className="text-base font-black tracking-tighter text-white uppercase italic leading-none">ROCKIT <span className="text-indigo-400 not-italic">ENGINE</span></h1>
+            {/* Controls moved under title */}
+            <div className="flex items-center gap-2 mt-1">
+                 <button 
+                  onClick={() => setIsPaused(!isPaused)}
+                  className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
+                    isPaused ? 'text-amber-400' : 'text-slate-500 hover:text-indigo-400'
+                  }`}
+                  title={isPaused ? "Resume Auto-Refresh" : "Pause Auto-Refresh"}
+                >
+                  {isPaused ? <Pause className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
+                  {isPaused ? 'PAUSED' : `${countdown}S`}
+                </button>
+                <div className="w-0.5 h-0.5 rounded-full bg-slate-700"></div>
+                <button 
+                  onClick={() => { fetchFileList(true); setCountdown(REFRESH_INTERVAL_SEC); }}
+                  className="group flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-white transition-colors"
+                  title="Refresh Now"
+                >
+                  <RefreshCw className="w-2.5 h-2.5 group-hover:rotate-180 transition-transform" />
+                </button>
             </div>
           </div>
         </div>
 
-        {currentSnapshot && (
-          <div className="flex items-center gap-4">
-             {errorMsg && (
-               <div className="flex items-center gap-2 px-3 py-1.5 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[10px] text-rose-400 font-black uppercase animate-pulse">
+        {/* Center: Intelligence Protocol Banner */}
+        {currentSnapshot ? (
+           <div className={`flex-1 mx-6 h-full rounded-2xl border flex items-center justify-between px-4 gap-4 overflow-hidden transition-all duration-700 shadow-inner ${
+             isLong ? 'bg-emerald-500/5 border-emerald-500/20' : 
+             isShort ? 'bg-rose-500/5 border-rose-500/20' : 
+             'bg-indigo-500/5 border-indigo-500/20'
+           }`}>
+             
+             {/* Narrative */}
+             <div className="flex items-center gap-3 overflow-hidden min-w-0 flex-1">
+                <div className={`p-2 rounded-xl shrink-0 ${
+                   isLong ? 'bg-emerald-500/20 text-emerald-400' : 
+                   isShort ? 'bg-rose-500/20 text-rose-400' : 
+                   'bg-indigo-500/20 text-indigo-400'
+                }`}>
+                   {isLong ? <ArrowUpRight className="w-4 h-4" /> : isShort ? <ArrowDownRight className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                </div>
+                <div className="min-w-0">
+                   <span className={`text-[8px] font-black uppercase tracking-[0.2em] block mb-0.5 ${isLong ? 'text-emerald-500/70' : isShort ? 'text-rose-500/70' : 'text-indigo-500/70'}`}>
+                     Intelligence Protocol
+                   </span>
+                   <h3 className="text-xs font-bold text-slate-200 italic tracking-tight truncate max-w-lg xl:max-w-2xl" title={narrative}>
+                     "{narrative}"
+                   </h3>
+                </div>
+             </div>
+
+             {/* Navigation Tabs */}
+             <div className="flex items-center gap-1 shrink-0">
+                <TabButton id="brief" label="Brief" icon={Info} />
+                <TabButton id="logic" label="Logic" icon={Cpu} />
+                <TabButton id="intraday" label="Intraday" icon={Timer} />
+                <TabButton id="dpoc" label="DPOC" icon={Waypoints} />
+                <TabButton id="globex" label="Globex" icon={Globe} />
+                <TabButton id="profile" label="Profile" icon={BarChartHorizontal} />
+                <TabButton id="tpo" label="TPO" icon={Grid3X3} />
+                {thinkingText && <TabButton id="thinking" label="Think" icon={Brain} />}
+             </div>
+
+             {/* Metrics: Score & Bias */}
+             <div className="flex items-center gap-3 shrink-0 pl-3 border-l border-slate-800/50">
+                <div className="text-right">
+                    <span className="text-[8px] font-bold text-slate-500 uppercase tracking-widest block">Trust</span>
+                    <div className="flex items-center justify-end gap-1 text-white font-mono font-black">
+                       <Target className="w-3 h-3 text-indigo-400" />
+                       {currentSnapshot?.decoded?.confidence || '0%'}
+                    </div>
+                </div>
+                <div className={`px-3 py-1.5 rounded-lg border font-black text-xs tracking-wider ${
+                    isLong ? 'bg-emerald-500 text-emerald-950 border-emerald-400' : 
+                    isShort ? 'bg-rose-500 text-rose-950 border-rose-400' : 
+                    'bg-indigo-500 text-indigo-950 border-indigo-400'
+                }`}>
+                  {bias}
+                </div>
+             </div>
+           </div>
+        ) : <div className="flex-1" />}
+
+        {/* Right: Clock & Error */}
+        <div className="flex items-center gap-3 shrink-0">
+           {errorMsg && (
+               <div className="hidden xl:flex items-center gap-1.5 px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[9px] text-rose-400 font-black uppercase animate-pulse">
                  <AlertCircle className="w-3 h-3" /> {errorMsg}
                </div>
-             )}
-            <div className="flex items-center gap-3 bg-slate-800/80 px-5 py-2.5 rounded-2xl border border-slate-700/50 shadow-inner">
-              <Clock className="w-4 h-4 text-indigo-400" />
-              <span className="text-base font-mono font-black text-white tracking-tighter">{currentSnapshot.input.current_et_time}</span>
-            </div>
-          </div>
-        )}
+           )}
+           
+           {currentSnapshot && (
+             <div className="flex items-center gap-2 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700/50 shadow-inner">
+               <Clock className="w-4 h-4 text-indigo-400" />
+               <span className="text-sm font-mono font-black text-white tracking-tighter">{currentSnapshot.input.current_et_time}</span>
+             </div>
+           )}
+        </div>
       </header>
 
       <main className="flex-1 flex overflow-hidden">
@@ -369,13 +503,32 @@ const App: React.FC = () => {
               {processedSnapshots.map((s, idx) => {
                 const active = idx === selectedIndex;
                 const bias = (s.decoded?.bias || 'NEUTRAL').toUpperCase();
+                const confidence = s.decoded?.confidence || '0%';
+                const confVal = parseInt(confidence.replace(/\D/g, '')) || 0;
+                const isHighConf = confVal > 80;
+
+                // 15-minute interval check starting 9:30
+                const [hh, mm] = (s.input.current_et_time || "00:00").split(':').map(Number);
+                const isQuarterSession = !isNaN(hh) && !isNaN(mm) && 
+                                         (hh > 9 || (hh === 9 && mm >= 30)) && 
+                                         (mm % 15 === 0);
+
                 return (
                   <button key={idx} onClick={() => { setSelectedIndex(idx); autoScrollEnabled.current = (idx === processedSnapshots.length-1); }}
                     className={`w-full text-left p-4 rounded-2xl transition-all border group relative overflow-hidden ${
-                      active ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' : 'bg-slate-900/60 border-slate-800/60 hover:border-slate-600'
+                      active 
+                        ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl scale-[1.02]' 
+                        : isQuarterSession
+                          ? 'bg-yellow-500/10 border-yellow-500/30 hover:border-yellow-500/50'
+                          : 'bg-slate-900/60 border-slate-800/60 hover:border-slate-600'
                     }`}>
                     <div className="flex items-center justify-between relative z-10">
-                      <span className={`text-[11px] font-black font-mono ${active ? 'text-white' : 'text-slate-400'}`}>{s.input.current_et_time}</span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className={`text-[11px] font-black font-mono ${active ? 'text-white' : isQuarterSession ? 'text-yellow-100' : 'text-slate-400'}`}>{s.input.current_et_time}</span>
+                        <span className={`text-[9px] font-bold ${isHighConf ? 'animate-pulse text-emerald-300' : 'text-slate-500'}`}>
+                           {confidence}
+                        </span>
+                      </div>
                       <span className={`text-[9px] px-2 py-0.5 rounded-lg font-black uppercase tracking-tighter ${
                         active ? 'bg-white/20' : bias.includes('LONG') ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : bias.includes('SHORT') ? 'text-rose-400 bg-rose-500/10 border border-rose-500/20' : 'text-slate-600 bg-slate-800'
                       }`}>
@@ -396,6 +549,7 @@ const App: React.FC = () => {
               snapshot={currentSnapshot} 
               output={currentSnapshot.decoded || null} 
               allSnapshots={processedSnapshots} 
+              activeTab={activeTab}
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-slate-700">

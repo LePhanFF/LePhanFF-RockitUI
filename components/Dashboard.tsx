@@ -44,12 +44,10 @@ interface DashboardProps {
   snapshot: MarketSnapshot;
   output: DecodedOutput | null;
   allSnapshots?: MarketSnapshot[];
+  activeTab: string;
 }
 
-type TabType = 'brief' | 'logic' | 'intraday' | 'dpoc' | 'globex' | 'profile' | 'tpo' | 'thinking';
-
-const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [] }) => {
-  const [activeTab, setActiveTab] = useState<TabType>('brief');
+const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab }) => {
   
   const [showVWAP, setShowVWAP] = useState(true);
   const [showIB, setShowIB] = useState(true);
@@ -166,9 +164,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
   const reasoning = output?.day_type_reasoning || [];
   const narrative = output?.one_liner || "Processing Signal Flux...";
-  const bias = (output?.bias || 'NEUTRAL').toUpperCase();
-  const isLong = bias.includes('LONG');
-  const isShort = bias.includes('SHORT');
   const dayType = output?.day_type?.type || "ANALYZING";
   const valueAcceptance = output?.value_acceptance || "Calculating...";
   const tpoRead = output?.tpo_read;
@@ -178,18 +173,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
     (typeof snapshot?.output === 'string' && snapshot.output.includes('<think>') 
       ? snapshot.output.split('<think>')[1].split('</think>')[0] 
       : null);
-
-  const TabButton = ({ id, label, icon: Icon }: { id: TabType, label: string, icon: any }) => (
-    <button onClick={() => setActiveTab(id)}
-      className={`flex-1 min-w-[70px] flex flex-col items-center justify-center gap-2 py-3.5 rounded-xl transition-all border ${
-        activeTab === id 
-          ? 'bg-indigo-600 text-white border-indigo-400 shadow-lg' 
-          : 'bg-slate-900/40 text-slate-400 border-transparent hover:bg-slate-800/60 hover:text-slate-200'
-      }`}>
-      <Icon className="w-5 h-5" />
-      <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
-    </button>
-  );
 
   const ToggleButton = ({ 
     active, 
@@ -230,41 +213,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
   return (
     <div className="flex flex-col h-full gap-4 overflow-hidden">
-      {/* Strategic Banner */}
-      <div className={`shrink-0 border p-5 rounded-[2rem] flex items-center justify-between gap-6 shadow-2xl relative overflow-hidden transition-all duration-700 ${
-        isLong ? 'bg-emerald-500/10 border-emerald-500/30' : 
-        isShort ? 'bg-rose-500/10 border-rose-500/30' : 
-        'bg-indigo-500/10 border-indigo-500/30'
-      }`}>
-        <div className="flex items-center gap-5 relative z-10 overflow-hidden">
-          <div className={`p-3.5 rounded-2xl border flex items-center justify-center shadow-lg shrink-0 ${
-            isLong ? 'bg-emerald-500 text-white border-emerald-400' : 
-            isShort ? 'bg-rose-500 text-white border-rose-400' : 
-            'bg-indigo-600 text-white border-indigo-400'
-          }`}>
-            {isLong ? <ArrowUpRight className="w-6 h-6" /> : isShort ? <ArrowDownRight className="w-6 h-6" /> : <Activity className="w-6 h-6" />}
-          </div>
-          <div className="min-w-0">
-             <span className={`text-[10px] font-bold uppercase tracking-[0.3em] mb-1.5 block ${isLong ? 'text-emerald-400' : isShort ? 'text-rose-400' : 'text-indigo-400'}`}>
-               Intelligence Protocol
-             </span>
-             <h3 className="text-xl font-black text-white italic tracking-tight uppercase leading-none truncate" title={narrative}>"{narrative}"</h3>
-          </div>
-        </div>
-        <div className="flex items-center gap-6 pr-2 relative z-10 shrink-0">
-           <div className="text-right hidden xl:block">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Trust Score</span>
-              <div className="text-2xl font-mono font-black text-slate-100 tracking-tighter">{output?.confidence || '0%'}</div>
-           </div>
-           <div className={`px-8 py-3.5 rounded-xl border font-black text-lg tracking-[0.2em] shadow-xl ${
-             isLong ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20' : 
-             isShort ? 'bg-rose-600 text-white border-rose-500 shadow-rose-500/20' : 
-             'bg-indigo-600 text-white border-indigo-500 shadow-indigo-500/20'
-           }`}>
-             {bias}
-           </div>
-        </div>
-      </div>
+      {/* Strategic Banner Removed - Content Moved to App Header */}
 
       <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
         {/* Left Side: Chart (Takes remaining space) */}
@@ -272,7 +221,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
           <div className="flex items-center justify-between mb-4 shrink-0">
              <div className="flex items-center gap-3">
                <Terminal className="w-4 h-4 text-indigo-400" />
-               <h2 className="text-xs font-black uppercase tracking-widest text-white">Migration Matrix</h2>
+               <h2 className="text-xs font-black uppercase tracking-widest text-white">ROCKIT COMMAND CENTER</h2>
              </div>
              <div className="flex items-center gap-1.5 bg-slate-950/80 p-1 rounded-xl border border-slate-800 shadow-xl scale-90">
                 <ToggleButton active={showGlobex} onClick={() => setShowGlobex(!showGlobex)} icon={Globe} label="Globex" activeClass="bg-amber-600 text-white shadow-lg" />
@@ -316,19 +265,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
         {/* Right Side: Analytical Matrix (FIXED WIDTH) */}
         <div className="w-[480px] xl:w-[540px] shrink-0 flex flex-col bg-slate-900/50 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl min-h-0">
-          <div className="p-3 bg-slate-900/90 border-b border-slate-800 shrink-0 overflow-x-auto custom-scrollbar">
-             <div className="flex gap-2 min-w-max">
-                <TabButton id="brief" label="Brief" icon={Info} />
-                <TabButton id="logic" label="Logic" icon={Cpu} />
-                <TabButton id="intraday" label="Intraday" icon={Timer} />
-                <TabButton id="dpoc" label="DPOC" icon={Waypoints} />
-                <TabButton id="globex" label="Globex" icon={Globe} />
-                <TabButton id="profile" label="Profile" icon={BarChartHorizontal} />
-                <TabButton id="tpo" label="TPO" icon={Grid3X3} />
-                {thinkingText && <TabButton id="thinking" label="Think" icon={Brain} />}
-             </div>
-          </div>
-
+          
           <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-slate-950/20">
             {activeTab === 'brief' && (
               <div className="space-y-4 animate-in fade-in duration-500 pb-4">
@@ -680,7 +617,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                </div>
             )}
             
-            {/* ... rest of component ... */}
             {activeTab === 'dpoc' && (
                <div className="space-y-4 animate-in fade-in duration-500 pb-4">
                   {/* Regime Banner */}
@@ -910,7 +846,6 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                </div>
             )}
             
-            {/* ... rest of component ... */}
             {activeTab === 'profile' && (
               <div className="space-y-5 animate-in fade-in duration-500 h-full flex flex-col">
                 <div className="grid grid-cols-1 gap-5">
