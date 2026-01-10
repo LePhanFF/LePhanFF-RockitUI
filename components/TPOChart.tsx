@@ -1,13 +1,16 @@
 
-import React, { useState, useMemo, useRef } from 'react';
-import { Settings2, BarChart2, Grid } from 'lucide-react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { Grid, ZoomIn, ZoomOut, AlertOctagon, BarChart2 } from 'lucide-react';
 
 interface TPOChartProps {
   tpoProfile: {
     current_poc: number;
     current_vah: number;
     current_val: number;
-    tpo_shape: string;
+    poor_high: boolean | number;
+    poor_low: boolean | number;
+    single_prints_above_vah: number;
+    single_prints_below_val: number;
   };
   volumeProfile: {
     poc: number;
@@ -16,156 +19,247 @@ interface TPOChartProps {
     hvn_nodes: number[];
     lvn_nodes: number[];
   };
-  sessionHigh: number;
-  sessionLow: number;
+  history: any[];
   currentPrice: number;
+  timeframe?: '30m' | '5m';
 }
 
-const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, sessionHigh, sessionLow, currentPrice }) => {
-  const [timeframe, setTimeframe] = useState<'30m' | '5m'>('30m');
+const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, history, currentPrice, timeframe = '30m' }) => {
   const [zoom, setZoom] = useState(1);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Generate ticks
-  const tickSize = 0.5; // Every 2 ticks assuming ES roughly
-  const minPrice = Math.floor(sessionLow / 10) * 10;
-  const maxPrice = Math.ceil(sessionHigh / 10) * 10;
-  
-  const ticks = useMemo(() => {
-    const t = [];
-    for (let p = maxPrice; p >= minPrice; p -= tickSize) {
-      t.push(p);
+  // --- TPO & VOLUME CALCULATION ENGINE ---
+  const { tpoRows, minPrice, maxPrice, maxVolume } = useMemo(() => {
+    if (!history || history.length === 0) return { tpoRows: [], minPrice: 0, maxPrice: 0, maxVolume: 0 };
+
+    const tickSize = 0.50; // ES Tick Size
+    const tpoMap = new Map<number, Set<string>>();
+    const volumeMap = new Map<number, number>();
+    
+    let minP = Infinity;
+    let maxP = -Infinity;
+    let maxVol = 0;
+
+    // Sort history by time to ensure proper delta volume calculation
+    const sortedHistory = [...history].sort((a, b) => 
+       (a.input?.current_et_time || '').localeCompare(b.input?.current_et_time || '')
+    );
+
+    let previousCumulativeVol = 0;
+
+    // Helper: Map time to TPO Letter
+    const getLetter = (timeStr: string) => {
+      const [hh, mm] = timeStr.split(':').map(Number);
+      const minutesFromOpen = (hh * 60 + mm) - (9 * 60 + 30); // relative to 9:30
+      
+      if (minutesFromOpen < 0) return 'P'; // Pre-market
+
+      let periodIndex = 0;
+      if (timeframe === '5m') {
+         periodIndex = Math.floor(minutesFromOpen / 5);
+      } else {
+         periodIndex = Math.floor(minutesFromOpen / 30);
+      }
+      
+      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+      return letters[periodIndex] || '?';
+    };
+
+    sortedHistory.forEach(snap => {
+      const time = snap.input?.current_et_time;
+      if (!time) return;
+      
+      const letter = getLetter(time);
+      const ib = snap.input?.intraday?.ib;
+      if (!ib) return;
+
+      const p1 = ib.current_open;
+      const p2 = ib.current_close;
+      
+      const rangeHigh = Math.max(p1, p2);
+      const rangeLow = Math.min(p1, p2);
+
+      // Expand Global Range
+      if (rangeHigh > maxP) maxP = rangeHigh;
+      if (rangeLow < minP) minP = rangeLow;
+
+      // --- Volume Distribution ---
+      const currentCumulativeVol = ib.current_volume || 0;
+      const snapshotVol = Math.max(0, currentCumulativeVol - previousCumulativeVol);
+      previousCumulativeVol = currentCumulativeVol;
+
+      // Determine ticks in range
+      // We add +1 because the range includes both endpoints in our loop
+      const tickCount = Math.floor((rangeHigh - rangeLow) / tickSize) + 1;
+      const volPerTick = tickCount > 0 ? snapshotVol / tickCount : 0;
+
+      // Bucket prices
+      for (let p = rangeLow; p <= rangeHigh; p += tickSize) {
+        const tickPrice = Math.round(p * 2) / 2;
+        
+        // TPO Letter
+        if (!tpoMap.has(tickPrice)) {
+            tpoMap.set(tickPrice, new Set());
+        }
+        tpoMap.get(tickPrice)?.add(letter);
+
+        // Volume Profile
+        const currentVol = volumeMap.get(tickPrice) || 0;
+        const newVol = currentVol + volPerTick;
+        volumeMap.set(tickPrice, newVol);
+        if (newVol > maxVol) maxVol = newVol;
+      }
+    });
+
+    if (minP === Infinity) return { tpoRows: [], minPrice: 0, maxPrice: 0, maxVolume: 0 };
+
+    // Pad Range
+    minP = Math.floor(minP) - 2;
+    maxP = Math.ceil(maxP) + 2;
+
+    // Convert Map to Sorted Rows
+    const rows = [];
+    for (let p = maxP; p >= minP; p -= tickSize) {
+        const price = Math.round(p * 2) / 2;
+        const lettersSet = tpoMap.get(price);
+        const letterStr = lettersSet ? Array.from(lettersSet).sort().join('') : '';
+        const volume = volumeMap.get(price) || 0;
+        
+        rows.push({ price, letters: letterStr, volume });
     }
-    return t;
-  }, [maxPrice, minPrice]);
 
-  // Simulate TPO Data distribution based on POC/VA
-  const getTPORow = (price: number) => {
-    // Distance from POC
-    const dist = Math.abs(price - tpoProfile.current_poc);
-    // Max width at POC
-    let width = Math.max(1, 26 - (dist * 0.8)); // Simulated curve
-    
-    // Adjust for shape
-    if (tpoProfile.tpo_shape === 'p_shape' && price > tpoProfile.current_poc) width += 2;
-    if (tpoProfile.tpo_shape === 'b_shape' && price < tpoProfile.current_poc) width += 2;
-    
-    // Randomize slightly
-    width = Math.max(1, Math.floor(width + (Math.random() * 2 - 1)));
-    
-    // Generate letters
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    let letters = "";
-    const startChar = timeframe === '30m' ? 0 : 0; // In 5m we might use numbers or granular, keeping letters for visual style
-    for(let i=0; i<width; i++) {
-        letters += alphabet[i % 26];
-    }
-    
-    // Volume simulation (HVN check)
-    const isHVN = volumeProfile.hvn_nodes.some(n => Math.abs(n - price) < 1);
-    const isLVN = volumeProfile.lvn_nodes.some(n => Math.abs(n - price) < 1);
-    let volWidth = width * 10;
-    if (isHVN) volWidth *= 1.5;
-    if (isLVN) volWidth *= 0.4;
+    return { tpoRows: rows, minPrice: minP, maxPrice: maxP, maxVolume: maxVol };
 
-    return { letters, volWidth };
-  };
+  }, [history, timeframe]);
 
-  const handleAutoFit = () => {
-    if (scrollContainerRef.current && ticks.length > 0) {
-      const containerHeight = scrollContainerRef.current.clientHeight;
-      // Base height is 12px. We want ticks.length * 12 * zoom <= containerHeight
-      const fittedZoom = (containerHeight - 32) / (ticks.length * 12); // -32 for padding
-      setZoom(Math.max(0.1, Math.min(3, fittedZoom)));
-    }
-  };
+  // Auto-scroll
+  useEffect(() => {
+     if (scrollRef.current && tpoRows.length > 0) {
+        const centerRatio = (maxPrice - currentPrice) / (maxPrice - minPrice);
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight * centerRatio - (scrollRef.current.clientHeight / 2);
+     }
+  }, [tpoRows, currentPrice, maxPrice, minPrice]);
 
-  const rowHeight = 12 * zoom;
-  const fontSize = Math.max(2, 10 * zoom);
-  
+  const rowHeight = 14 * zoom;
+  const fontSize = 10 * zoom;
+  const priceColWidth = 70 * zoom;
+
+  const hasPoorHigh = tpoProfile?.poor_high === 1 || tpoProfile?.poor_high === true;
+  const hasPoorLow = tpoProfile?.poor_low === 1 || tpoProfile?.poor_low === true;
+
+  if (tpoRows.length === 0) {
+      return <div className="h-full flex items-center justify-center text-slate-500 font-mono text-xs">No TPO Data for Timeframe</div>;
+  }
+
   return (
-    <div className="h-full bg-slate-900/40 border border-slate-800 rounded-[2rem] p-6 flex flex-col relative overflow-hidden group">
-        {/* Controls Header */}
-        <div className="flex items-center justify-between mb-4 z-10 relative shrink-0">
-            <div className="flex items-center gap-2">
-                <Grid className="w-4 h-4 text-indigo-400" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">TPO / Volume Matrix</span>
-            </div>
-            <div className="flex gap-2">
-                <div className="bg-slate-950 p-1 rounded-lg border border-slate-800 flex gap-1">
-                    <button onClick={() => setTimeframe('5m')} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${timeframe === '5m' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>5M</button>
-                    <button onClick={() => setTimeframe('30m')} className={`px-3 py-1 rounded-md text-[9px] font-black transition-all ${timeframe === '30m' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>30M</button>
-                </div>
-            </div>
+    <div className="h-full flex flex-col relative group">
+        {/* Controls Overlay */}
+        <div className="absolute top-4 right-4 z-20 flex flex-col gap-2 bg-slate-900/80 p-1.5 rounded-lg border border-slate-800/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => setZoom(z => Math.min(z + 0.1, 2.5))} className="p-1 hover:bg-slate-700 rounded text-slate-400"><ZoomIn className="w-4 h-4" /></button>
+            <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))} className="p-1 hover:bg-slate-700 rounded text-slate-400"><ZoomOut className="w-4 h-4" /></button>
         </div>
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex min-h-0 relative gap-2">
-            {/* Y-Axis Zoom Control (Sidebar) */}
-            <div className="w-6 flex flex-col items-center justify-center py-2 bg-slate-950/30 rounded-lg border border-slate-800/50 shrink-0">
-                <div className="flex-1 flex items-center justify-center py-2 w-full h-full">
-                     <input 
-                       type="range" 
-                       min="0.1" 
-                       max="3" 
-                       step="0.05" 
-                       value={zoom} 
-                       onChange={(e) => setZoom(parseFloat(e.target.value))}
-                       onDoubleClick={handleAutoFit}
-                       className="h-full w-1 appearance-none bg-slate-800 rounded-full cursor-pointer accent-indigo-500 hover:accent-indigo-400"
-                       style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
-                       title="Zoom Price Axis (Double-click to Auto Fit)"
-                     />
-                </div>
-            </div>
+        {/* Header Info */}
+        <div className="absolute top-0 left-0 w-full p-4 pointer-events-none z-10 flex justify-between items-start bg-gradient-to-b from-slate-900 via-slate-900/80 to-transparent">
+             <div className="flex items-center gap-2">
+                <Grid className="w-4 h-4 text-indigo-400" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">TPO Matrix</span>
+             </div>
+             <div className="flex gap-4">
+                 <div className="text-right">
+                     <span className="text-[9px] text-slate-500 font-bold block">VAH</span>
+                     <span className="text-[10px] font-mono text-indigo-400">{tpoProfile?.current_vah?.toFixed(2)}</span>
+                 </div>
+                 <div className="text-right">
+                     <span className="text-[9px] text-slate-500 font-bold block">POC</span>
+                     <span className="text-[10px] font-mono text-amber-400">{tpoProfile?.current_poc?.toFixed(2)}</span>
+                 </div>
+                 <div className="text-right">
+                     <span className="text-[9px] text-slate-500 font-bold block">VAL</span>
+                     <span className="text-[10px] font-mono text-indigo-400">{tpoProfile?.current_val?.toFixed(2)}</span>
+                 </div>
+             </div>
+        </div>
 
-            {/* Chart Scroll Area */}
-            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar relative bg-slate-950/30 rounded-xl border border-slate-800/50">
-                <div className="w-full flex flex-col py-4 min-h-full">
-                    {ticks.map((price, i) => {
-                        const { letters, volWidth } = getTPORow(price);
-                        const isPOC = Math.abs(price - tpoProfile.current_poc) < tickSize;
-                        const isVA = price <= tpoProfile.current_vah && price >= tpoProfile.current_val;
-                        const isCurrent = Math.abs(price - currentPrice) < tickSize;
-                        
-                        return (
-                            <div 
-                              key={price} 
-                              className={`flex items-center font-mono hover:bg-slate-800/30 transition-colors ${isCurrent ? 'bg-rose-500/10' : ''}`}
-                              style={{ height: `${rowHeight}px` }}
-                            >
-                                {/* Price Axis */}
-                                <div 
-                                  className={`w-16 text-right pr-4 shrink-0 border-r border-slate-800 ${isCurrent ? 'text-rose-400 font-bold' : isPOC ? 'text-amber-400 font-bold' : 'text-slate-600'}`}
-                                  style={{ fontSize: `${fontSize}px` }}
-                                >
-                                    {price.toFixed(2)}
-                                </div>
-
-                                {/* TPO Letters */}
-                                <div className="flex-1 flex items-center h-full relative pl-2 overflow-hidden">
-                                    {/* Volume BG Bar */}
-                                    <div 
-                                        className={`absolute left-0 h-full opacity-10 ${isVA ? 'bg-indigo-500' : 'bg-slate-500'}`}
-                                        style={{ width: `${Math.min(100, volWidth/3)}%` }}
-                                    />
-                                    
-                                    {/* Letters */}
-                                    <span 
-                                      className={`tracking-widest z-10 whitespace-nowrap ${isPOC ? 'text-amber-400 font-black' : isVA ? 'text-indigo-300' : 'text-slate-600'} ${isCurrent ? 'text-rose-400' : ''}`} 
-                                      style={{ fontSize: `${Math.max(2, fontSize - 1)}px`, lineHeight: `${rowHeight}px` }}
-                                    >
-                                        {letters}
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
+        {/* Scrollable Chart */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar pt-16 relative">
+            {tpoRows.map((row) => {
+                const isCurrent = Math.abs(row.price - currentPrice) < 0.25;
+                const isPOC = Math.abs(row.price - tpoProfile?.current_poc) < 0.25;
+                const isVAH = Math.abs(row.price - tpoProfile?.current_vah) < 0.25;
+                const isVAL = Math.abs(row.price - tpoProfile?.current_val) < 0.25;
                 
-                {/* Overlay Grid */}
-                 <div className="absolute inset-0 pointer-events-none sticky top-0" style={{ backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px)', backgroundSize: '100px 100px' }}></div>
-            </div>
+                // Volume Bar Calculation
+                const volPercent = maxVolume > 0 ? (row.volume / maxVolume) * 100 : 0;
+
+                const isSinglePrintZone = (tpoProfile?.single_prints_above_vah > 0 && row.price > tpoProfile.current_vah && row.letters.length === 1) ||
+                                          (tpoProfile?.single_prints_below_val > 0 && row.price < tpoProfile.current_val && row.letters.length === 1);
+
+                return (
+                    <div 
+                        key={row.price} 
+                        className={`flex items-center hover:bg-slate-800/30 transition-colors relative ${
+                            isCurrent ? 'bg-rose-500/10' : ''
+                        }`}
+                        style={{ height: `${rowHeight}px` }}
+                    >
+                        {/* Price Column */}
+                        <div 
+                            className={`text-right pr-3 shrink-0 font-mono border-r border-slate-800 flex items-center justify-end gap-2 relative z-10 bg-slate-950/20 backdrop-blur-[1px]
+                                ${isCurrent ? 'text-rose-400 font-bold' : isPOC ? 'text-amber-400 font-bold' : 'text-slate-500'}
+                            `}
+                            style={{ fontSize: `${fontSize}px`, width: `${priceColWidth}px` }}
+                        >
+                            {isVAH && <span className="text-indigo-500 font-bold mr-1" style={{ fontSize: `${fontSize * 0.8}px` }}>VAH</span>}
+                            {isVAL && <span className="text-indigo-500 font-bold mr-1" style={{ fontSize: `${fontSize * 0.8}px` }}>VAL</span>}
+                            {row.price.toFixed(2)}
+                        </div>
+
+                        {/* Letters & Volume Column */}
+                        <div className="flex-1 flex items-center px-2 relative font-mono tracking-widest leading-none h-full">
+                            {/* Volume Background Bar */}
+                            <div 
+                                className="absolute left-0 top-0.5 bottom-0.5 bg-indigo-500/10 rounded-r-sm transition-all duration-500 border-r border-indigo-500/20"
+                                style={{ width: `${volPercent}%` }}
+                            />
+                            
+                            {/* POC Line */}
+                            {isPOC && <div className="absolute left-0 w-full h-px bg-amber-500/30 top-1/2 -translate-y-1/2 z-0"></div>}
+                            
+                            {/* Letters */}
+                            <span 
+                                className={`relative z-10
+                                    ${isPOC ? 'text-amber-400 font-black' : isSinglePrintZone ? 'text-pink-400' : 'text-slate-400'}
+                                    ${isCurrent ? 'text-rose-400' : ''}
+                                `}
+                                style={{ fontSize: `${fontSize}px` }}
+                            >
+                                {row.letters}
+                            </span>
+
+                            {/* Poor High/Low Indicators */}
+                            {row.price === maxPrice && hasPoorHigh && (
+                                <div className="ml-2 flex items-center gap-1 font-black uppercase text-rose-500 bg-rose-500/10 px-1 rounded border border-rose-500/20 relative z-10"
+                                     style={{ fontSize: `${fontSize * 0.8}px` }}>
+                                    <AlertOctagon style={{ width: fontSize, height: fontSize }} /> Poor High
+                                </div>
+                            )}
+                             {row.price === minPrice && hasPoorLow && (
+                                <div className="ml-2 flex items-center gap-1 font-black uppercase text-rose-500 bg-rose-500/10 px-1 rounded border border-rose-500/20 relative z-10"
+                                     style={{ fontSize: `${fontSize * 0.8}px` }}>
+                                    <AlertOctagon style={{ width: fontSize, height: fontSize }} /> Poor Low
+                                </div>
+                            )}
+                             {isSinglePrintZone && (
+                                <span className="ml-2 font-bold text-pink-500/50 uppercase whitespace-nowrap relative z-10"
+                                      style={{ fontSize: `${fontSize * 0.7}px` }}>
+                                    Single Print
+                                </span>
+                             )}
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     </div>
   );

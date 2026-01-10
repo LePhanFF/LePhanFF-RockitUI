@@ -27,6 +27,7 @@ interface MigrationChartProps {
   showProfile: boolean;
   showFVG: boolean;
   showDPOC: boolean;
+  showVolPOC: boolean; // NEW Prop
   levels: {
     asia_high: number;
     asia_low: number;
@@ -80,6 +81,23 @@ const DPOCSliceDot = (props: any) => {
     return null;
 };
 
+// Custom Dot for Volume POC Steps (Distinct Ping - Amber)
+const POCStepDot = (props: any) => {
+    const { cx, cy, payload } = props;
+    if (payload && payload.vol_poc_marker) {
+        return (
+             <svg x={cx - 10} y={cy - 10} width={20} height={12} className="overflow-visible">
+                <circle cx="10" cy="10" r="4" fill="#f59e0b" stroke="#fff" strokeWidth="1.5" />
+                {/* Critical Blink Effect - Faster and larger */}
+                <circle cx="10" cy="10" r="8" stroke="#f59e0b" strokeWidth="2" fill="none" className="animate-ping" style={{ animationDuration: '1s' }}/>
+                <circle cx="10" cy="10" r="12" stroke="#f59e0b" strokeWidth="1" fill="none" opacity="0.5" className="animate-pulse" />
+            </svg>
+        );
+    }
+    return null;
+};
+
+
 const CandleShape = (props: any) => {
     const { x, y, width, height, payload } = props;
     const { open, close, high, low } = payload;
@@ -119,7 +137,7 @@ const CandleShape = (props: any) => {
 };
 
 const MigrationChart: React.FC<MigrationChartProps> = ({ 
-  data, currentPrice, showOHLC, showVWAP, showEMA, showInstitutional, showIB, showProfile, showFVG, showDPOC, levels, profileLevels, fvgData 
+  data, currentPrice, showOHLC, showVWAP, showEMA, showInstitutional, showIB, showProfile, showFVG, showDPOC, showVolPOC, levels, profileLevels, fvgData 
 }) => {
   // --- State ---
   // Brush (X-Axis) State: indices of the full dataset
@@ -498,6 +516,16 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
             
             {showDPOC && (
                <>
+                 {/* Explicit DPOC Slice Markers */}
+                 <Line 
+                    dataKey="dpoc_marker" 
+                    stroke="none" 
+                    isAnimationActive={false}
+                    dot={<DPOCSliceDot />}
+                    connectNulls={false}
+                 />
+
+                 {/* Algorithm DPOC Area */}
                  <Area 
                    type="stepAfter" 
                    dataKey="dpoc" 
@@ -507,14 +535,33 @@ const MigrationChart: React.FC<MigrationChartProps> = ({
                    isAnimationActive={false} 
                    dot={(props) => <PulsingDot {...props} data={data} />}
                  />
-                 {/* Explicit DPOC Slice Markers */}
+               </>
+            )}
+
+            {showVolPOC && (
+               <>
+                 {/* NEW: Historical Volume POC Trace (Dashed Line) */}
                  <Line 
-                    dataKey="dpoc_marker" 
-                    stroke="none" 
+                    type="stepAfter" 
+                    dataKey="vol_poc" 
+                    stroke="#f59e0b" 
+                    strokeWidth={3}
+                    strokeDasharray="4 4"
+                    dot={false}
                     isAnimationActive={false}
-                    dot={<DPOCSliceDot />}
+                    name="Volume POC History"
+                    opacity={1}
+                    className="animate-pulse" // Pulsing Line
+                  />
+                  
+                  {/* NEW: Volume POC Step Markers (Blinking Dots) */}
+                  <Line
+                    dataKey="vol_poc_marker"
+                    stroke="none"
+                    dot={<POCStepDot />}
+                    isAnimationActive={false}
                     connectNulls={false}
-                 />
+                  />
                </>
             )}
             
