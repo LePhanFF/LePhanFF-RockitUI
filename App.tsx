@@ -34,7 +34,10 @@ import {
   Rocket,
   FileJson,
   Palette,
-  Key
+  Key,
+  Lightbulb,
+  GraduationCap,
+  Map
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -521,8 +524,10 @@ const App: React.FC = () => {
                 <TabButton id="tpo" label="TPO" icon={Grid3X3} />
                 {thinkingText && <TabButton id="thinking" label="Think" icon={Brain} />}
                 <div className="w-px h-6 bg-border mx-1"></div>
-                <TabButton id="audit" label="Audit" icon={FileSearch} />
+                <TabButton id="coach" label="Coach" icon={GraduationCap} />
+                <TabButton id="htf-coach" label="HTF Coach" icon={Map} />
                 <TabButton id="rk-audit" label="RK Audit" icon={Rocket} />
+                <TabButton id="trade-idea" label="Trade Idea" icon={Lightbulb} />
                 <TabButton id="json" label="JSON" icon={FileJson} />
              </div>
 

@@ -3,8 +3,10 @@ import React from 'react';
 import { MarketSnapshot, DecodedOutput } from '../types';
 import GeminiAudit from './GeminiAudit';
 import RockitAudit from './RockitAudit';
+import HTFCoach from './HTFCoach';
 import JsonExplorer from './JsonExplorer';
 import ChartSection from './ChartSection';
+import TradeIdea from './TradeIdea';
 
 // Tab Components
 import BriefTab from './tabs/BriefTab';
@@ -75,15 +77,27 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
             {activeTab === 'thinking' && <ThinkingTab thinkingText={thinkingText} />}
 
-            {activeTab === 'audit' && (
+            {activeTab === 'coach' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <GeminiAudit snapshots={allSnapshots} />
+                 <GeminiAudit snapshots={allSnapshots} currentSnapshot={snapshot} />
+               </div>
+            )}
+
+            {activeTab === 'htf-coach' && (
+               <div className="h-full animate-in fade-in duration-500 flex flex-col">
+                 <HTFCoach snapshots={allSnapshots} currentSnapshot={snapshot} />
                </div>
             )}
 
              {activeTab === 'rk-audit' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
                  <RockitAudit snapshots={allSnapshots} />
+               </div>
+            )}
+
+             {activeTab === 'trade-idea' && (
+               <div className="h-full animate-in fade-in duration-500 flex flex-col">
+                 <TradeIdea snapshots={allSnapshots} currentSnapshot={snapshot} />
                </div>
             )}
 

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { MarketSnapshot } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -13,22 +13,58 @@ import {
   ChevronRight,
   MessageSquare,
   Send,
-  Rocket
+  Rocket,
+  GraduationCap
 } from 'lucide-react';
 
 interface GeminiAuditProps {
   snapshots: MarketSnapshot[];
+  currentSnapshot: MarketSnapshot;
 }
 
-const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots }) => {
+// Raw URL for the JSON file
+const QUESTIONS_URL = "https://raw.githubusercontent.com/LePhanFF/LePhanFF-RockitUI/main/gemini-questions.json";
+
+const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customQuery, setCustomQuery] = useState('');
+  
+  // State for fetched questions: Expected format { "Category Name": ["Question 1", "Question 2"] }
+  const [categorizedQuestions, setCategorizedQuestions] = useState<Record<string, string[]>>({});
+
+  // Point-in-time logic: Filter snapshots to only include data up to current time
+  const historyPointInTime = useMemo(() => {
+    if (!snapshots || !currentSnapshot) return [];
+    const currentTime = currentSnapshot.input.current_et_time;
+    // Sort by time just in case, then filter
+    return snapshots
+        .filter(s => s.input.current_et_time <= currentTime)
+        .sort((a, b) => a.input.current_et_time.localeCompare(b.input.current_et_time));
+  }, [snapshots, currentSnapshot]);
+
+  // Fetch questions on mount
+  useEffect(() => {
+    const loadQuestions = async () => {
+        try {
+            const res = await fetch(QUESTIONS_URL);
+            if (res.ok) {
+                const data = await res.json();
+                setCategorizedQuestions(data);
+            } else {
+                console.warn(`Failed to fetch questions: ${res.status}`);
+            }
+        } catch (e) {
+            console.error("Error loading questions:", e);
+        }
+    };
+    loadQuestions();
+  }, []);
 
   const generateAudit = async () => {
-    if (!snapshots || snapshots.length === 0) {
-      setError("No session data available to analyze.");
+    if (!historyPointInTime || historyPointInTime.length === 0) {
+      setError("No session data available up to this timestamp.");
       return;
     }
 
@@ -37,8 +73,8 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots }) => {
     setReport('');
 
     try {
-      // 1. Condense Data for Context Window
-      const contextData = snapshots.map(s => ({
+      // 1. Condense Data for Context Window (Using strictly history up to now)
+      const contextData = historyPointInTime.map(s => ({
         time: s.input.current_et_time,
         price: s.input.intraday.ib.current_close,
         bias: s.decoded?.bias || 'N/A',
@@ -53,9 +89,12 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots }) => {
       
       // 3. Construct Prompt
       let prompt = `
-        You are a master Market Profile trading analyst and psychologist. 
+        You are a master Market Profile trading coach and psychologist. 
         
-        SESSION DATA JSON:
+        CURRENT TIME: ${currentSnapshot?.input?.current_et_time}
+        (Analyze only the provided data history up to this point. Do not use future knowledge.)
+
+        SESSION DATA HISTORY:
         ${JSON.stringify(contextData)}
       `;
 
@@ -64,41 +103,28 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots }) => {
           USER QUESTION: "${customQuery}"
 
           INSTRUCTIONS:
-          Answer the user's specific question based strictly on the provided SESSION DATA. 
+          Answer the user's specific question based strictly on the provided SESSION DATA up to ${currentSnapshot?.input?.current_et_time}.
           Use professional trading terminology (Market Profile, Auction Theory).
-          Format the response in clear Markdown.
+          Format the response in clear Markdown with bold key terms.
         `;
       } else {
         prompt += `
           OBJECTIVE:
-          Generate a "Session Post-Mortem & Audit" report. Look for structural shifts, traps ("gotchas"), and narrative changes.
+          Generate a "Session Coach" report. Look for structural shifts, traps ("gotchas"), and narrative changes up to the current timestamp.
 
           FORMAT REQUIREMENTS:
           Return the response in Markdown. Use the following structure strictly:
 
-          ## ⚡ TL;DR Summary
-          (A concise 2-3 sentence summary of the entire session's character)
+          ## ⚡ Situational Awareness (${currentSnapshot?.input?.current_et_time})
+          (A concise summary of the session's character SO FAR)
 
-          ## 🕰 Chronological Breakdown
+          ## 🕰 Chronological Progression
+          (Break down the key rotations provided in the data)
 
-          ### 🌅 Early Open (09:30 - 10:30)
-          *   **Action:** Describe price action and IB formation.
-          *   **Narrative:** What was the initial Algo bias?
-          
-          ### 🏙 Mid-Morning Rotation (10:30 - 11:30)
-          *   **Shift:** Did the initial trend hold or fail? 
-          *   **Structure:** Note any DPOC migration or IB extension.
-
-          ### 🥪 The Lunch Lull (11:30 - 12:30)
-          *   **State:** Compression, chop, or continuation?
-
-          ### 🌇 PM Session (12:30 - Close)
-          *   **Resolution:** How did the day resolve?
-          
-          ## 🧠 Analyst Insights
-          *   **Transition Points:** Identify specific times where the market changed character (The "Morph").
-          *   **The "Gotcha":** Where were traders trapped today?
-          *   **Key Idea:** One actionable takeaway for tomorrow based on today's structure.
+          ## 🧠 Coach's Corner
+          *   **The "Morph":** Did the day type change recently?
+          *   **The Trap:** Where might traders be getting offsides right now?
+          *   **Actionable Insight:** One key thing to watch for in the next 30 minutes.
         `;
       }
 
@@ -128,84 +154,113 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots }) => {
     }
   };
 
-  // Simple Markdown Renderer
+  // Improved Markdown Renderer with Larger Fonts
   const renderMarkdown = (text: string) => {
     return text.split('\n').map((line, i) => {
       if (line.startsWith('## ')) {
-        return <h2 key={i} className="text-lg font-black text-indigo-400 mt-8 mb-3 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-4 h-4" />{line.replace('## ', '')}</h2>;
+        return <h2 key={i} className="text-xl font-black text-indigo-400 mt-10 mb-4 uppercase tracking-widest flex items-center gap-3 border-b-2 border-indigo-500/20 pb-2"><Sparkles className="w-6 h-6" />{line.replace('## ', '')}</h2>;
       }
       if (line.startsWith('### ')) {
-        return <h3 key={i} className="text-sm font-bold text-slate-200 mt-6 mb-2 uppercase tracking-wider bg-slate-800/50 p-2 rounded-lg border-l-2 border-indigo-500 shadow-lg">{line.replace('### ', '')}</h3>;
+        return <h3 key={i} className="text-lg font-bold text-slate-200 mt-8 mb-3 uppercase tracking-wider bg-slate-800/50 p-3 rounded-xl border-l-4 border-indigo-500 shadow-lg">{line.replace('### ', '')}</h3>;
       }
       if (line.trim().startsWith('*   **')) {
         const content = line.replace('*   **', '').replace('**', ':');
         const [title, ...rest] = content.split(':');
         return (
-            <div key={i} className="flex gap-2 mb-2 ml-4">
-                <span className="text-slate-400 font-bold shrink-0">{title}:</span>
-                <span className="text-slate-300">{rest.join(':')}</span>
+            <div key={i} className="flex gap-3 mb-3 ml-4 items-baseline">
+                <span className="text-slate-300 font-bold shrink-0 text-base">{title}:</span>
+                <span className="text-slate-400 text-base leading-relaxed">{rest.join(':')}</span>
             </div>
         );
       }
       if (line.startsWith('- ')) {
-        return <li key={i} className="ml-6 list-disc text-slate-300 my-1">{line.replace('- ', '')}</li>;
+        return <li key={i} className="ml-6 list-disc text-slate-300 my-2 text-base leading-relaxed pl-2">{line.replace('- ', '')}</li>;
       }
       if (line.trim() === '') return <br key={i} />;
       
-      return <p key={i} className="text-slate-400 leading-relaxed mb-1">{line}</p>;
+      return <p key={i} className="text-slate-300 leading-relaxed mb-2 text-base font-medium">{line}</p>;
     });
   };
 
   return (
     <div className="h-full flex flex-col bg-slate-900/40 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl">
       {/* Header */}
-      <div className="p-6 border-b border-slate-800 bg-slate-900/60 shrink-0 space-y-4">
+      <div className="p-6 border-b border-slate-800 bg-slate-900/60 shrink-0 space-y-5">
         {/* Top Row: Title */}
         <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500/10 rounded-xl border border-indigo-500/20">
-                    <FileText className="w-6 h-6 text-indigo-400" />
+            <div className="flex items-center gap-4">
+                <div className="p-3 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
+                    <GraduationCap className="w-8 h-8 text-indigo-400" />
                 </div>
                 <div>
-                    <h2 className="text-sm font-black uppercase tracking-widest text-slate-200">Gemini Audit & Analyst</h2>
-                    <p className="text-[10px] text-slate-500 font-mono">SESSION POST-MORTEM & CUSTOM INQUIRY</p>
+                    <h2 className="text-lg font-black uppercase tracking-widest text-slate-200">Gemini Coach</h2>
+                    <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-slate-500 font-mono">POINT-IN-TIME ANALYSIS</span>
+                        <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-indigo-300 font-bold">
+                            T: {currentSnapshot?.input?.current_et_time}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
 
-        {/* Input Row */}
-        <div className="flex gap-3">
-            <div className="relative flex-1 group">
-                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                     <MessageSquare className="w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
-                 </div>
-                 <input
-                     type="text"
-                     value={customQuery}
-                     onChange={(e) => setCustomQuery(e.target.value)}
-                     onKeyDown={(e) => e.key === 'Enter' && !loading && generateAudit()}
-                     placeholder="E.g., 'Analyze the transition from 10:30 to 11:30' or leave empty for full audit"
-                     className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-200 text-xs rounded-xl py-2.5 pl-9 pr-4 outline-none focus:border-indigo-500 transition-all placeholder:text-slate-600 font-mono"
-                 />
+        {/* Question Selector & Input Row */}
+        <div className="flex flex-col gap-4">
+            {/* Suggestions Dropdown */}
+            <select
+                className="w-full bg-slate-950/50 border border-slate-700/50 text-slate-300 text-sm font-medium rounded-xl py-3 px-4 outline-none focus:border-indigo-500 transition-all hover:bg-slate-900/80 cursor-pointer shadow-inner"
+                onChange={(e) => setCustomQuery(e.target.value)}
+                value=""
+            >
+                 <option value="" disabled>Select a suggested question...</option>
+                 {Object.keys(categorizedQuestions).length > 0 ? (
+                    Object.entries(categorizedQuestions).map(([category, questions]) => (
+                        <optgroup key={category} label={category} className="bg-slate-900 text-indigo-400 font-black uppercase tracking-widest text-xs">
+                            {Array.isArray(questions) && questions.map((q, idx) => (
+                                <option key={idx} value={q} className="bg-slate-950 text-slate-300 font-sans normal-case text-sm py-1">
+                                    {q}
+                                </option>
+                            ))}
+                        </optgroup>
+                    ))
+                 ) : (
+                    <option disabled className="text-slate-500">Loading suggested questions...</option>
+                 )}
+            </select>
+
+            <div className="flex gap-3 h-12">
+                <div className="relative flex-1 group h-full">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <MessageSquare className="w-5 h-5 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+                    </div>
+                    <input
+                        type="text"
+                        value={customQuery}
+                        onChange={(e) => setCustomQuery(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && !loading && generateAudit()}
+                        placeholder="Ask your coach anything..."
+                        className="w-full h-full bg-slate-950/50 border border-slate-700/50 text-slate-200 text-base rounded-xl pl-12 pr-4 outline-none focus:border-indigo-500 transition-all placeholder:text-slate-600 font-medium shadow-inner"
+                    />
+                </div>
+                {!loading && (
+                    <button 
+                        onClick={generateAudit}
+                        className="shrink-0 h-full flex items-center gap-2 px-8 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)] transform hover:-translate-y-0.5"
+                    >
+                        {customQuery ? (
+                            <>
+                            <Send className="w-4 h-4" />
+                            <span>Ask</span>
+                            </>
+                        ) : (
+                            <>
+                            <Sparkles className="w-4 h-4 group-hover:animate-spin" />
+                            <span>Analyze</span>
+                            </>
+                        )}
+                    </button>
+                )}
             </div>
-            {!loading && (
-                <button 
-                    onClick={generateAudit}
-                    className="shrink-0 flex items-center gap-2 px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)]"
-                >
-                    {customQuery ? (
-                        <>
-                           <Send className="w-3 h-3" />
-                           <span>Ask Gemini</span>
-                        </>
-                    ) : (
-                        <>
-                           <Sparkles className="w-3 h-3 group-hover:animate-spin" />
-                           <span>Full Audit</span>
-                        </>
-                    )}
-                </button>
-            )}
         </div>
       </div>
 
@@ -215,57 +270,56 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots }) => {
         {/* Empty State */}
         {!report && !loading && !error && (
             <div className="h-full flex flex-col items-center justify-center opacity-40">
-                <Brain className="w-24 h-24 text-slate-700 mb-6" />
-                <p className="text-sm font-black uppercase tracking-widest text-slate-600">Ready to Analyze Session Structure</p>
-                <p className="text-xs text-slate-600 mt-2 font-mono">Ask a question or click Full Audit to process {snapshots.length} snapshots</p>
+                <Brain className="w-32 h-32 text-slate-700 mb-8" />
+                <p className="text-lg font-black uppercase tracking-widest text-slate-500">Coach is Ready</p>
+                <div className="flex items-center gap-3 mt-4 text-xs text-slate-500 font-mono bg-slate-900 px-4 py-2 rounded-full border border-slate-800">
+                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                    Monitoring Session up to {currentSnapshot?.input?.current_et_time}
+                </div>
             </div>
         )}
 
         {/* Loading State */}
         {loading && (
             <div className="h-full flex flex-col items-center justify-center">
-                <div className="relative">
-                    <div className="w-20 h-20 border-4 border-slate-800 rounded-full"></div>
-                    <div className="absolute top-0 left-0 w-20 h-20 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
-                    <Brain className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-indigo-400 animate-pulse" />
+                <div className="relative mb-8">
+                    <div className="w-24 h-24 border-4 border-slate-800 rounded-full"></div>
+                    <div className="absolute top-0 left-0 w-24 h-24 border-4 border-t-indigo-500 rounded-full animate-spin"></div>
+                    <Brain className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 text-indigo-400 animate-pulse" />
                 </div>
-                <p className="mt-8 text-xs font-black uppercase tracking-[0.3em] text-indigo-400 animate-pulse">
-                    {customQuery ? 'Processing Query...' : 'Analyzing Market Structure...'}
+                <p className="text-sm font-black uppercase tracking-[0.3em] text-indigo-400 animate-pulse">
+                    {customQuery ? 'Consulting Coach...' : 'Reviewing Tape...'}
                 </p>
-                <div className="mt-2 flex flex-col items-center gap-1 text-[10px] text-slate-500 font-mono">
-                    <span>Scanning {snapshots.length} snapshots...</span>
-                    <span className="delay-75">Synthesizing Narrative...</span>
-                </div>
             </div>
         )}
 
         {/* Error State */}
         {error && (
-            <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-start gap-4">
-                <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0" />
+            <div className="p-8 bg-rose-500/10 border border-rose-500/20 rounded-3xl flex items-start gap-5">
+                <AlertTriangle className="w-8 h-8 text-rose-400 shrink-0" />
                 <div>
-                    <h3 className="text-sm font-bold text-rose-400 uppercase tracking-wide">Analysis Failed</h3>
-                    <p className="text-xs text-rose-300/80 mt-1 font-mono">{error}</p>
+                    <h3 className="text-lg font-bold text-rose-400 uppercase tracking-wide">Analysis Failed</h3>
+                    <p className="text-sm text-rose-300/80 mt-2 font-mono">{error}</p>
                 </div>
             </div>
         )}
 
         {/* Report Content */}
         {report && (
-            <div className="max-w-4xl mx-auto space-y-1 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                <div className="flex items-center gap-2 mb-8 opacity-50">
-                    <Clock className="w-3 h-3 text-slate-500" />
-                    <span className="text-[10px] font-mono text-slate-500 uppercase">
-                        {customQuery ? 'Custom Query Response' : 'Full Session Post-Mortem'} • Gemini 3 Pro
+            <div className="max-w-5xl mx-auto space-y-2 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
+                <div className="flex items-center gap-3 mb-10 opacity-60 border-b border-slate-800 pb-4">
+                    <Clock className="w-4 h-4 text-slate-500" />
+                    <span className="text-xs font-mono text-slate-500 uppercase font-bold tracking-wider">
+                        {customQuery ? 'Custom Query Response' : `Session Review • ${currentSnapshot?.input?.current_et_time}`}
                     </span>
                 </div>
                 
-                <div className="prose prose-invert prose-headings:font-black prose-p:text-slate-400 max-w-none">
+                <div className="prose prose-invert prose-headings:font-black prose-p:text-slate-300 max-w-none">
                     {renderMarkdown(report)}
                 </div>
 
-                <div className="mt-12 pt-8 border-t border-slate-800/50 flex items-center justify-center">
-                    <Quote className="w-6 h-6 text-slate-700" />
+                <div className="mt-16 pt-10 border-t border-slate-800/50 flex items-center justify-center opacity-30">
+                    <Quote className="w-8 h-8 text-slate-500" />
                 </div>
             </div>
         )}
