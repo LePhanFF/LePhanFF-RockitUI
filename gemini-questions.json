@@ -1,0 +1,48 @@
+{
+  "Day Type": [
+    "Can we confirm it's a classical dalton trend day and how strong is it",
+    "Can we confirm it's a balanced day, and what is skew shape",
+    "Is this shaping as a Trend Up or Trend Down day based on IB acceptance and hold?",
+    "Do we have Open Drive characteristics with early displacement outside prior range?",
+    "Is the profile building Double Distribution with separated AM/PM value areas?",
+    "Confirm Neutral Range — minor skew but contained within IB?",
+    "Pure Balance day — rotational chop, flat POC, max compression?"
+  ],
+  "TPO": [
+    "Are we accepting recent price move in TPO",
+    "Are there poor high or poor low detected",
+    "Are there single prints, fast rejection of the price",
+    "Is current price fattening above VAH or below VAL — strong acceptance?",
+    "Any single prints stacking at the extreme high/low — rejection tail forming?",
+    "Did recent single prints fill with doubles — acceptance or failed rejection?",
+    "Poor high/low locked in — unfinished auction at extremes?",
+    "Profile shape — b-shape rotational, P-shape rejection, or elongated trend?",
+    "DPOC migrating toward VAH/VAL extreme — buyer/seller control building?"
+  ],
+  "OR": [
+    "Tell me about opening range, did we sweep or balanced FVG/BPR, or inverted major FVG/fail BPR",
+    "Did we sweep Asia/London high/low and reclaim — failed auction or continuation?",
+    "Overnight range — held, swept engulfed, or reclaimed failed?",
+    "Previous day high/low status — naked resistance/support or tested?",
+    "IB high/low — price accepted outside or rotating inside?",
+    "Any inverted FVG/BPR from higher timeframe — major trap setup?"
+  ],
+  "Trade": [
+    "Should I short this market, reason why",
+    "Should I try to go long, reason why",
+    "Did we reclaim some major level recently",
+    "Did we fail to reclaim some major level recently",
+    "Did we sweep or reclaim overnight level (asia, london, previous day, previous week, new york high/low)",
+    "What is the order flow right now",
+    "Best risk/reward setup right now — long or short?",
+    "Is this a high-conviction fade of VAH rejection or VAL defense?",
+    "Pyramid opportunity — continuation aligning with DPOC regime?",
+    "Scalp only — choppy regime, no size?",
+    "Recent level reclaim — bullish override or bear trap?",
+    "Recent level failure — bearish override or bull trap?",
+    "Sweep of prior high/low — liquidity grab complete, favor continuation?",
+    "Order flow bias — buying tail initiative or selling pressure dominant?",
+    "Risk of PM fade — weak trend + rejection + wrong side of VA?",
+    "Super-trending escalation — 60-min hold + extreme DPOC?"
+  ]
+}
