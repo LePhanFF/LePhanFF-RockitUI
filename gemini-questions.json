@@ -44,5 +44,29 @@
     "Order flow bias — buying tail initiative or selling pressure dominant?",
     "Risk of PM fade — weak trend + rejection + wrong side of VA?",
     "Super-trending escalation — 60-min hold + extreme DPOC?"
+  ],
+  "ICT": [
+    "Are we in premium or discount array right now?",
+    "Any unfilled bullish or bearish FVG nearby — discount or premium zone?",
+    "Did we just create or mitigate a Fair Value Gap on this move?",
+    "Is there an Order Block supporting current price — bullish or bearish OB?",
+    "Any Breaker Block formed recently — potential reversal zone?",
+    "Market structure — higher highs/higher lows intact or MSS (shift) happening?",
+    "Liquidity grab detected — swept equal highs/lows or prior swing?",
+    "Optimal Trade Entry (OTE) zone — 62-79% retrace of impulse in play?",
+    "Judas Swing setup — fakeout above prior high/low before reversal?",
+    "SMT divergence — NQ vs ES/YM leading or diverging?",
+    "Current displacement — strong impulsive move or balanced rotation?",
+    "Any inverted FVG from higher timeframe acting as magnet or trap?"
+  ],
+  "ICT-BPR": [
+    "Did a bullish Breaker Block (BPR) form recently?",
+    "Did a bearish Breaker Block (BPR) form recently?",
+    "Are we retesting a Breaker Block right now — bullish or bearish?",
+    "Did we fail a Breaker Block retest — potential reversal setup?",
+    "Did we reclaim a Breaker Block — continuation or trap?",
+    "Is this a valid/high-quality BPR — did it break market structure cleanly?",
+    "Any Breaker Block confluence with FVG or Order Block?",
+    "Current price action relative to nearest Breaker Block — approaching, retesting, or breaking?"
   ]
 }
