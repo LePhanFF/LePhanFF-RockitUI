@@ -317,7 +317,8 @@ const App: React.FC = () => {
       
       for (let i = 0; i < contents.length; i++) {
         const key = contents[i].getElementsByTagName("Key")[0]?.textContent;
-        if (key && (key.endsWith('.json') || key.endsWith('.jsonl')) && !key.endsWith('/')) {
+        // Logic: Must be .jsonl AND NOT in 'inference/' subfolder
+        if (key && key.endsWith('.jsonl') && !key.includes('inference/') && !key.endsWith('/')) {
            files.push(key);
         }
       }
@@ -328,7 +329,7 @@ const App: React.FC = () => {
         if (contents.length === 0 && (text.includes("<html") || text.includes("<!DOCTYPE"))) {
            throw new Error("Received HTML instead of XML bucket listing.");
         }
-        throw new Error("No .json/.jsonl files found in bucket.");
+        throw new Error("No .jsonl files found in bucket root.");
       }
 
       setAvailableFiles(files);

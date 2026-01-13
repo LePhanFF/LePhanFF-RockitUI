@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { MarketSnapshot } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -30,7 +29,26 @@ const CSV_URLS = {
     'ym': 'https://drive.google.com/uc?id=1CWh3hLNnZRjkfThbLRCqJphZQqtjEKoI&export=download'
 };
 
-const QUESTIONS_URL = "https://raw.githubusercontent.com/LePhanFF/LePhanFF-RockitUI/main/gemini-htf-questions.json";
+const QUESTIONS_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-htf-questions.json";
+
+const DEFAULT_HTF_QUESTIONS = {
+  "Macro Landscape": [
+    "Analyze the Daily timeframe trend.",
+    "Check Weekly profile balance.",
+    "Is the market inside or outside prior day range?",
+    "Identify major swing levels nearby."
+  ],
+  "Inter-Market": [
+    "Correlate ES structure with NQ.",
+    "Check for divergences between indices.",
+    "Analyze volume flow on the daily chart."
+  ],
+  "Strategic": [
+    "Is the intraday action supported by HTF?",
+    "Where is the major HTF rejection level?",
+    "What is the risk of a multi-day reversal?"
+  ]
+};
 
 // Aggregated Candle Interface
 interface AggregatedCandle {
@@ -61,17 +79,24 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
       ym: AggregatedCandle[];
   }>({ es: [], nq: [], ym: [] });
 
-  // 1. Fetch Suggested Questions
+  // 1. Fetch Suggested Questions with Fallback
   useEffect(() => {
     const loadQuestions = async () => {
         try {
-            const res = await fetch(QUESTIONS_URL);
+            // Add cache buster to prevent stale data
+            const res = await fetch(`${QUESTIONS_URL}?cb=${Date.now()}`);
+
             if (res.ok) {
                 const data = await res.json();
-                setCategorizedQuestions(data);
+                if (Object.keys(data).length > 0) {
+                    setCategorizedQuestions(data);
+                    return;
+                }
             }
+            throw new Error("Fetch failed or empty");
         } catch (e) {
-            console.error("Error loading questions:", e);
+            console.warn("Using default HTF questions due to load error:", e);
+            setCategorizedQuestions(DEFAULT_HTF_QUESTIONS);
         }
     };
     loadQuestions();
@@ -243,7 +268,7 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
         const ymContext = filterHistory(historyContext.ym);
 
         // B. Summarize Internal JSONL Context (Rockit Analysis History)
-        const internalHistory = snapshots
+        const internalHistory: Record<string, MarketSnapshot[]> = snapshots
             .filter(s => s.input.current_et_time <= currentTime || s.input.session_date < currentDate)
             .reduce((acc, s) => {
                 const d = s.input.session_date;
@@ -255,7 +280,7 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
         const internalSummary = Object.entries(internalHistory)
             .sort((a, b) => a[0].localeCompare(b[0]))
             .slice(-3) // Last 3 sessions from internal data
-            .map(([date, snaps]) => {
+            .map(([date, snaps]: [string, MarketSnapshot[]]) => {
                 const isToday = date === currentDate;
                 if (isToday) {
                     const samples = snaps.filter((_, i) => i % 6 === 0 || i === snaps.length - 1);
@@ -392,7 +417,7 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
                 <div>
                     <h2 className="text-lg font-black uppercase tracking-widest text-slate-200">HTF Context Coach</h2>
                     <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-slate-500 font-mono">MULTI-ASSET DATA LINK</span>
+                        <span className="text-xs text-slate-500 font-mono">POINT-IN-TIME ANALYSIS</span>
                         {csvLoading ? (
                              <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-[10px] font-mono text-amber-400 font-bold animate-pulse">
                                 <DownloadCloud className="w-3 h-3" /> Fetching CSVs...

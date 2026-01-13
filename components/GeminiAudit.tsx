@@ -14,7 +14,10 @@ import {
   MessageSquare,
   Send,
   Rocket,
-  GraduationCap
+  GraduationCap,
+  HardDrive,
+  Database,
+  Check
 } from 'lucide-react';
 
 interface GeminiAuditProps {
@@ -22,8 +25,29 @@ interface GeminiAuditProps {
   currentSnapshot: MarketSnapshot;
 }
 
-// Raw URL for the JSON file
-const QUESTIONS_URL = "https://raw.githubusercontent.com/LePhanFF/LePhanFF-RockitUI/main/gemini-questions.json";
+// URLs
+const QUESTIONS_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-questions.json";
+const GROK_MEMORY_URL = "https://storage.googleapis.com/rockit-data/inference/grok-memory.md"; // Upload your text/json export here
+
+const DEFAULT_QUESTIONS = {
+  "Session Structure": [
+    "Identify the Day Type based on current structure.",
+    "Is the Initial Balance (IB) statistically significant?",
+    "Analyze the TPO distribution shape.",
+    "Are there any single prints or anomalies?"
+  ],
+  "Strategic Alignment": [
+    "What is the current bias confidence?",
+    "Where is the invalidation point for the current trend?",
+    "Is value migrating with price?",
+    "Check for volume divergences."
+  ],
+  "Psychology Check": [
+    "Am I fighting the dominant auction?",
+    "Is the market rotational or trending?",
+    "What is the risk of a reversal here?"
+  ]
+};
 
 const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot }) => {
   const [report, setReport] = useState<string>('');
@@ -31,8 +55,12 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
   const [error, setError] = useState<string | null>(null);
   const [customQuery, setCustomQuery] = useState('');
   
-  // State for fetched questions: Expected format { "Category Name": ["Question 1", "Question 2"] }
+  // Data State
   const [categorizedQuestions, setCategorizedQuestions] = useState<Record<string, string[]>>({});
+  const [grokMemory, setGrokMemory] = useState<string | null>(null);
+  
+  // Control State
+  const [useGrokMemory, setUseGrokMemory] = useState(false); // Default OFF
 
   // Point-in-time logic: Filter snapshots to only include data up to current time
   const historyPointInTime = useMemo(() => {
@@ -44,22 +72,35 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
         .sort((a, b) => a.input.current_et_time.localeCompare(b.input.current_et_time));
   }, [snapshots, currentSnapshot]);
 
-  // Fetch questions on mount
+  // Fetch questions AND Memory on mount
   useEffect(() => {
-    const loadQuestions = async () => {
+    const initData = async () => {
+        const cacheBuster = Date.now();
+        
+        // 1. Fetch Questions
         try {
-            const res = await fetch(QUESTIONS_URL);
+            const res = await fetch(`${QUESTIONS_URL}?cb=${cacheBuster}`);
             if (res.ok) {
                 const data = await res.json();
-                setCategorizedQuestions(data);
-            } else {
-                console.warn(`Failed to fetch questions: ${res.status}`);
+                if (Object.keys(data).length > 0) setCategorizedQuestions(data);
             }
         } catch (e) {
-            console.error("Error loading questions:", e);
+            console.warn("Using default questions:", e);
+            setCategorizedQuestions(DEFAULT_QUESTIONS);
+        }
+
+        // 2. Fetch Grok Memory
+        try {
+            const memRes = await fetch(`${GROK_MEMORY_URL}?cb=${cacheBuster}`);
+            if (memRes.ok) {
+                const text = await memRes.text();
+                if (text.length > 50) setGrokMemory(text);
+            }
+        } catch (e) {
+            console.warn("No Grok memory found (optional).");
         }
     };
-    loadQuestions();
+    initData();
   }, []);
 
   const generateAudit = async () => {
@@ -89,9 +130,16 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
       
       // 3. Construct Prompt
       let prompt = `
-        You are a master Market Profile trading coach and psychologist. 
+        You are a master Market Profile trading coach and psychologist.
         
-        CURRENT TIME: ${currentSnapshot?.input?.current_et_time}
+        ---------------------------------------------------------
+        🧠 LONG-TERM MEMORY (GROK EXPERIENCE - LAST 75 DAYS):
+        ${(useGrokMemory && grokMemory) ? grokMemory : "Memory Module Disabled. Rely on standard principles."}
+        ---------------------------------------------------------
+        
+        📍 CURRENT SESSION CONTEXT:
+        Current Time: ${currentSnapshot?.input?.current_et_time}
+        
         (Analyze only the provided data history up to this point. Do not use future knowledge.)
 
         SESSION DATA HISTORY:
@@ -103,25 +151,28 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
           USER QUESTION: "${customQuery}"
 
           INSTRUCTIONS:
-          Answer the user's specific question based strictly on the provided SESSION DATA up to ${currentSnapshot?.input?.current_et_time}.
-          Use professional trading terminology (Market Profile, Auction Theory).
-          Format the response in clear Markdown with bold key terms.
+          1. Reference the "Grok Experience" memory if relevant patterns exist (e.g., "This looks like the trap we saw on Day 45...").
+          2. Answer the user's specific question based strictly on the provided SESSION DATA up to ${currentSnapshot?.input?.current_et_time}.
+          3. Use professional trading terminology (Market Profile, Auction Theory).
+          4. Format the response in clear Markdown with bold key terms.
         `;
       } else {
         prompt += `
           OBJECTIVE:
-          Generate a "Session Coach" report. Look for structural shifts, traps ("gotchas"), and narrative changes up to the current timestamp.
+          Generate a "Session Coach" report. Compare the current session behavior against your Long-Term Memory (Grok Experience) to identify recurring patterns or deviations.
 
-          FORMAT REQUIREMENTS:
-          Return the response in Markdown. Use the following structure strictly:
+          FORMAT REQUIREMENTS (Markdown):
 
           ## ⚡ Situational Awareness (${currentSnapshot?.input?.current_et_time})
           (A concise summary of the session's character SO FAR)
 
+          ## 🧠 Memory Recall (Pattern Matching)
+          (Does today resemble any specific days or setups from the Grok Memory? If so, how did those resolve?)
+
           ## 🕰 Chronological Progression
           (Break down the key rotations provided in the data)
 
-          ## 🧠 Coach's Corner
+          ## 🛡 Coach's Corner
           *   **The "Morph":** Did the day type change recently?
           *   **The Trap:** Where might traders be getting offsides right now?
           *   **Actionable Insight:** One key thing to watch for in the next 30 minutes.
@@ -130,7 +181,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
 
       // 4. Call API
       const responseStream = await ai.models.generateContentStream({
-        model: 'gemini-3-pro-preview',
+        model: 'gemini-3-pro-preview', // Pro model is essential for large context
         contents: [
             { role: 'user', parts: [{ text: prompt }] }
         ],
@@ -196,9 +247,26 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
                     <h2 className="text-lg font-black uppercase tracking-widest text-slate-200">Gemini Coach</h2>
                     <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-slate-500 font-mono">POINT-IN-TIME ANALYSIS</span>
-                        <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-indigo-300 font-bold">
-                            T: {currentSnapshot?.input?.current_et_time}
-                        </span>
+                        <button
+                            onClick={() => grokMemory && setUseGrokMemory(!useGrokMemory)}
+                            disabled={!grokMemory}
+                            title={!grokMemory ? "Grok Memory file not found" : "Toggle Long-Term Memory"}
+                            className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-[10px] font-mono font-bold transition-all ${
+                                useGrokMemory 
+                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.2)]' 
+                                    : 'bg-slate-800 border-slate-700 text-slate-500 hover:border-slate-600'
+                            } ${!grokMemory ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                            <div className={`w-3 h-3 rounded-[2px] border flex items-center justify-center transition-colors ${
+                                useGrokMemory ? 'bg-emerald-500 border-emerald-500' : 'border-slate-500 bg-transparent'
+                            }`}>
+                                {useGrokMemory && <Check className="w-2.5 h-2.5 text-slate-950 stroke-[4]" />}
+                            </div>
+                            <span className="flex items-center gap-1.5">
+                                <Database className="w-3 h-3" />
+                                Grok Memory
+                            </span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -238,7 +306,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
                         value={customQuery}
                         onChange={(e) => setCustomQuery(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && !loading && generateAudit()}
-                        placeholder="Ask your coach anything..."
+                        placeholder={useGrokMemory ? "Ask with Grok context..." : "Ask your coach anything..."}
                         className="w-full h-full bg-slate-950/50 border border-slate-700/50 text-slate-200 text-base rounded-xl pl-12 pr-4 outline-none focus:border-indigo-500 transition-all placeholder:text-slate-600 font-medium shadow-inner"
                     />
                 </div>
@@ -290,6 +358,11 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
                 <p className="text-sm font-black uppercase tracking-[0.3em] text-indigo-400 animate-pulse">
                     {customQuery ? 'Consulting Coach...' : 'Reviewing Tape...'}
                 </p>
+                {useGrokMemory && grokMemory && (
+                    <p className="text-[10px] text-emerald-400/70 font-mono mt-2 animate-pulse">
+                        Accessing Grok Long-Term Memory...
+                    </p>
+                )}
             </div>
         )}
 
