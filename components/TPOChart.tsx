@@ -131,7 +131,7 @@ const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, ibLevels
     minP = Math.floor(minP / tickSize) * tickSize;
     maxP = Math.ceil(maxP / tickSize) * tickSize;
 
-    // Add padding buckets
+    // Add padding buckets (2 rows above/below)
     minP -= (tickSize * 2);
     maxP += (tickSize * 2);
 
@@ -191,25 +191,28 @@ const TPOChart: React.FC<TPOChartProps> = ({ tpoProfile, volumeProfile, ibLevels
             <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.5))} className="p-2 hover:bg-slate-700 rounded text-slate-300 hover:text-white transition-colors"><ZoomOut className="w-4 h-4" /></button>
         </div>
         
-        {/* Aggregation Controls - Top Right (Moved down slightly to clear header) */}
-        <div className="absolute top-16 right-4 z-40 flex items-center gap-1 bg-slate-900/90 p-1 rounded-lg border border-slate-700 backdrop-blur-md shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="px-2 flex items-center gap-1 text-[9px] font-black uppercase text-slate-500 border-r border-slate-700 mr-1">
-                <Layers className="w-3 h-3" />
-                <span>Agg</span>
+        {/* Aggregation Slider - Top Right */}
+        <div className="absolute top-16 right-4 z-40 flex items-center gap-3 bg-slate-900/90 p-2 rounded-xl border border-slate-700 backdrop-blur-md shadow-xl opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 border-r border-slate-700 pr-3">
+                <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                <div className="flex flex-col leading-none">
+                    <span className="text-[8px] text-slate-500">BLOCK SIZE</span>
+                    <span className="text-indigo-300">{tickSize.toFixed(1)} pts</span>
+                </div>
             </div>
-            {[0.5, 1, 5, 10].map(val => (
-                <button
-                    key={val}
-                    onClick={() => setTickSize(val)}
-                    className={`px-2 py-1 rounded text-[9px] font-mono font-bold transition-all ${
-                        tickSize === val 
-                            ? 'bg-indigo-500 text-white shadow-lg' 
-                            : 'text-slate-400 hover:text-white hover:bg-slate-700'
-                    }`}
-                >
-                    {val}
-                </button>
-            ))}
+            <div className="flex items-center gap-2">
+                 <span className="text-[8px] font-mono text-slate-600">0.5</span>
+                 <input 
+                    type="range"
+                    min="0.5"
+                    max="25"
+                    step="0.5"
+                    value={tickSize}
+                    onChange={(e) => setTickSize(parseFloat(e.target.value))}
+                    className="w-32 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400 transition-all"
+                 />
+                 <span className="text-[8px] font-mono text-slate-600">25</span>
+            </div>
         </div>
 
         {/* Header Info - Clean layout */}
