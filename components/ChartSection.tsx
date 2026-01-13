@@ -1,6 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
-import { Terminal, Globe, Layers, GitCommit, Network, LineChart, Target, Shield, Zap, BarChart2 } from 'lucide-react';
+import React, { useState, useMemo, useRef } from 'react';
+import { Terminal, Globe, Layers, GitCommit, Network, LineChart, Target, Shield, Zap, BarChart2, Camera, Check } from 'lucide-react';
 import MigrationChart from './MigrationChart';
 import { MarketSnapshot } from '../types';
 
@@ -34,6 +34,9 @@ const ChartSection: React.FC<ChartSectionProps> = ({ snapshot, allSnapshots }) =
   const [showDPOC, setShowDPOC] = useState(true);
   const [showVolPOC, setShowVolPOC] = useState(true);
   const [showOHLC, setShowOHLC] = useState(true);
+  const [copied, setCopied] = useState(false);
+  
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const input = snapshot?.input;
   const intraday = input?.intraday;
@@ -135,6 +138,53 @@ const ChartSection: React.FC<ChartSectionProps> = ({ snapshot, allSnapshots }) =
     });
   }, [allSnapshots, snapshot, intraday, derivedSlices]);
 
+  const handleCopyChart = () => {
+    if (!containerRef.current) return;
+    const svg = containerRef.current.querySelector('svg');
+    if (!svg) return;
+
+    try {
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const img = new Image();
+        
+        // Add minimal styling to SVG for dark mode background
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+
+        img.onload = () => {
+            if (!ctx) return;
+            // Get dimensions from svg viewbox or bounding client rect
+            const svgRect = svg.getBoundingClientRect();
+            canvas.width = svgRect.width;
+            canvas.height = svgRect.height;
+            
+            // Draw background
+            ctx.fillStyle = '#0f172a'; // slate-900
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw SVG
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+                        .then(() => {
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                        })
+                        .catch(err => console.error('Copy failed:', err));
+                }
+                URL.revokeObjectURL(url);
+            }, 'image/png');
+        };
+        img.src = url;
+    } catch (e) {
+        console.error("Snapshot error:", e);
+    }
+  };
+
   return (
     <div className="flex-1 min-w-0 bg-surface/40 border border-border rounded-[2rem] p-5 flex flex-col shadow-inner relative group min-h-0 transition-colors duration-500">
       <div className="flex items-center justify-between mb-4 shrink-0">
@@ -142,21 +192,36 @@ const ChartSection: React.FC<ChartSectionProps> = ({ snapshot, allSnapshots }) =
             <Terminal className="w-4 h-4 text-accent" />
             <h2 className="text-xs font-black uppercase tracking-widest text-content">ROCKIT COMMAND CENTER</h2>
           </div>
-          <div className="flex items-center gap-1.5 bg-background/80 p-1 rounded-xl border border-border shadow-xl scale-90">
-            <ToggleButton active={showGlobex} onClick={() => setShowGlobex(!showGlobex)} icon={Globe} label="Globex" activeClass="bg-amber-600 text-white shadow-lg" />
-            <ToggleButton active={showProfile} onClick={() => setShowProfile(!showProfile)} icon={Layers} label="Profile" activeClass="bg-sky-600 text-white shadow-lg" />
-            <ToggleButton active={showDPOC} onClick={() => setShowDPOC(!showDPOC)} icon={GitCommit} label="Algo DPOC" activeClass="bg-indigo-600 text-white shadow-lg" />
-            <ToggleButton active={showVolPOC} onClick={() => setShowVolPOC(!showVolPOC)} icon={Network} label="TPO Trace" activeClass="bg-amber-500 text-white shadow-lg" />
-            <div className="w-px h-5 bg-border mx-1"></div>
-            <ToggleButton active={showEMAs} onClick={() => setShowEMAs(!showEMAs)} icon={LineChart} label="EMAs" activeClass="bg-violet-600 text-white shadow-lg" />
-            <ToggleButton active={showVWAP} onClick={() => setShowVWAP(!showVWAP)} icon={Target} label="VWAP" activeClass="bg-amber-400/80 text-white shadow-lg" />
-            <ToggleButton active={showIB} onClick={() => setShowIB(!showIB)} icon={Shield} label="IB Levels" activeClass="bg-orange-600 text-white shadow-lg" />
-            <ToggleButton active={showFVG} onClick={() => setShowFVG(!showFVG)} icon={Zap} label="FVG Zones" activeClass="bg-rose-600 text-white shadow-lg" />
-            <div className="w-px h-5 bg-border mx-1"></div>
-            <ToggleButton active={showOHLC} onClick={() => setShowOHLC(!showOHLC)} icon={BarChart2} label="Candles" activeClass="bg-emerald-600 text-white shadow-lg" />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5 bg-background/80 p-1 rounded-xl border border-border shadow-xl scale-90">
+                <ToggleButton active={showGlobex} onClick={() => setShowGlobex(!showGlobex)} icon={Globe} label="Globex" activeClass="bg-amber-600 text-white shadow-lg" />
+                <ToggleButton active={showProfile} onClick={() => setShowProfile(!showProfile)} icon={Layers} label="Profile" activeClass="bg-sky-600 text-white shadow-lg" />
+                <ToggleButton active={showDPOC} onClick={() => setShowDPOC(!showDPOC)} icon={GitCommit} label="Algo DPOC" activeClass="bg-indigo-600 text-white shadow-lg" />
+                <ToggleButton active={showVolPOC} onClick={() => setShowVolPOC(!showVolPOC)} icon={Network} label="TPO Trace" activeClass="bg-amber-500 text-white shadow-lg" />
+                <div className="w-px h-5 bg-border mx-1"></div>
+                <ToggleButton active={showEMAs} onClick={() => setShowEMAs(!showEMAs)} icon={LineChart} label="EMAs" activeClass="bg-violet-600 text-white shadow-lg" />
+                <ToggleButton active={showVWAP} onClick={() => setShowVWAP(!showVWAP)} icon={Target} label="VWAP" activeClass="bg-amber-400/80 text-white shadow-lg" />
+                <ToggleButton active={showIB} onClick={() => setShowIB(!showIB)} icon={Shield} label="IB Levels" activeClass="bg-orange-600 text-white shadow-lg" />
+                <ToggleButton active={showFVG} onClick={() => setShowFVG(!showFVG)} icon={Zap} label="FVG Zones" activeClass="bg-rose-600 text-white shadow-lg" />
+                <div className="w-px h-5 bg-border mx-1"></div>
+                <ToggleButton active={showOHLC} onClick={() => setShowOHLC(!showOHLC)} icon={BarChart2} label="Candles" activeClass="bg-emerald-600 text-white shadow-lg" />
+            </div>
+            
+            {/* Chart Screenshot Button */}
+            <button 
+                onClick={handleCopyChart}
+                className={`p-2 rounded-xl border transition-all ${
+                    copied 
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                        : 'bg-background/80 border-border text-content-muted hover:text-white hover:border-accent'
+                }`}
+                title="Copy Chart Image"
+            >
+                {copied ? <Check className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+            </button>
           </div>
       </div>
-      <div className="flex-1 bg-background/60 rounded-2xl overflow-hidden border border-border shadow-inner min-h-0">
+      <div ref={containerRef} className="flex-1 bg-background/60 rounded-2xl overflow-hidden border border-border shadow-inner min-h-0">
         <MigrationChart 
           data={chartData} 
           currentPrice={Number(ib?.current_close) || 0} 

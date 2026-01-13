@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { MarketSnapshot } from '../types';
 import { GoogleGenAI } from "@google/genai";
@@ -14,7 +15,9 @@ import {
   Layers,
   CalendarDays,
   FileText,
-  Upload
+  Upload,
+  Copy,
+  ClipboardCheck
 } from 'lucide-react';
 
 interface HTFCoachProps {
@@ -67,6 +70,7 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
   const [error, setError] = useState<string | null>(null);
   const [customQuery, setCustomQuery] = useState('');
   const [categorizedQuestions, setCategorizedQuestions] = useState<Record<string, string[]>>({});
+  const [copied, setCopied] = useState(false);
   
   // Manual Input State
   const [showManualInput, setShowManualInput] = useState(false);
@@ -253,6 +257,7 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
     setLoading(true);
     setError(null);
     setReport('');
+    setCopied(false);
 
     try {
         const currentDate = currentSnapshot.input.session_date;
@@ -356,7 +361,7 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
 
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const responseStream = await ai.models.generateContentStream({
-            model: 'gemini-3-pro-preview',
+            model: 'gemini-3-flash-preview',
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { temperature: 0.6 }
         });
@@ -371,6 +376,13 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
     } finally {
         setLoading(false);
     }
+  };
+
+  const handleCopy = () => {
+    if (!report) return;
+    navigator.clipboard.writeText(report);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const renderMarkdown = (text: string) => {
@@ -603,12 +615,30 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot }) => {
 
         {report && (
             <div className="max-w-5xl mx-auto space-y-2 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
-                <div className="flex items-center gap-3 mb-10 opacity-60 border-b border-slate-800 pb-4">
-                    <Clock className="w-4 h-4 text-slate-500" />
-                    <span className="text-xs font-mono text-slate-500 uppercase font-bold tracking-wider">
-                        HTF Analysis • {currentSnapshot?.input?.session_date}
-                    </span>
+                <div className="flex items-center justify-between mb-10 border-b border-slate-800 pb-4">
+                     <div className="flex items-center gap-3 opacity-60">
+                        <Clock className="w-4 h-4 text-slate-500" />
+                        <span className="text-xs font-mono text-slate-500 uppercase font-bold tracking-wider">
+                            HTF Analysis • {currentSnapshot?.input?.session_date}
+                        </span>
+                     </div>
+
+                     <button 
+                        onClick={handleCopy}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                            copied 
+                                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                                : 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/30'
+                        }`}
+                        title="Copy report to clipboard (Notion Ready)"
+                    >
+                        {copied ? <ClipboardCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            {copied ? 'Copied' : 'Copy'}
+                        </span>
+                    </button>
                 </div>
+                
                 <div className="prose prose-invert prose-headings:font-black prose-p:text-slate-300 max-w-none">
                     {renderMarkdown(report)}
                 </div>

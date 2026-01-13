@@ -1,22 +1,55 @@
 
-import React from 'react';
-import { Activity, Target, Fingerprint, AlignJustify, ScanBarcode, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Activity, Target, Fingerprint, AlignJustify, ScanBarcode, CheckCircle2, Copy, ClipboardCheck } from 'lucide-react';
 import { DecodedOutput } from '../../types';
 
 interface BriefTabProps {
   output: DecodedOutput | null;
+  time: string;
 }
 
-const BriefTab: React.FC<BriefTabProps> = ({ output }) => {
+const BriefTab: React.FC<BriefTabProps> = ({ output, time }) => {
+  const [copied, setCopied] = useState(false);
   const dayType = output?.day_type?.type || "ANALYZING";
   const narrative = output?.one_liner || "Processing Signal Flux...";
   const valueAcceptance = output?.value_acceptance || "Calculating...";
   const tpoRead = output?.tpo_read;
   const reasoning = output?.day_type_reasoning || [];
 
+  const handleCopy = () => {
+    const text = `
+**Brief Summary - ${time}**
+
+* **Day Type:** ${dayType}
+* **Confidence:** ${output?.confidence || '0%'}
+* **Narrative:** ${narrative}
+* **Value Acceptance:** ${valueAcceptance}
+* **TPO Structure:**
+  - Signal: ${tpoRead?.profile_signals || "N/A"}
+  - Migration: ${tpoRead?.dpoc_migration || "N/A"}
+  - State: ${tpoRead?.extreme_or_compression || "N/A"}
+* **Logic Drivers:**
+${reasoning.map(r => `  - ${r}`).join('\n')}
+    `.trim();
+    
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 pb-4">
-      <div className="grid grid-cols-2 gap-4">
+    <div className="space-y-4 animate-in fade-in duration-500 pb-4 relative">
+      <button 
+        onClick={handleCopy}
+        className={`absolute -top-2 right-0 p-1.5 rounded-lg transition-all ${
+            copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-white hover:bg-slate-800'
+        }`}
+        title="Copy Brief"
+      >
+        {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+      </button>
+
+      <div className="grid grid-cols-2 gap-4 mt-2">
           <div className="bg-slate-900/60 border border-slate-800 p-5 rounded-3xl flex flex-col justify-center">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5">Day Type</span>
             <div className="flex items-center gap-2">

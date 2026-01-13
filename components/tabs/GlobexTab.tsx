@@ -1,18 +1,52 @@
 
-import React from 'react';
-import { Globe, Maximize2, Minimize2, ArrowLeftRight, Layers } from 'lucide-react';
+import React, { useState } from 'react';
+import { Globe, Maximize2, Minimize2, ArrowLeftRight, Layers, Copy, ClipboardCheck } from 'lucide-react';
 
 interface GlobexTabProps {
   premarket: any;
+  time: string;
 }
 
-const GlobexTab: React.FC<GlobexTabProps> = ({ premarket }) => {
+const GlobexTab: React.FC<GlobexTabProps> = ({ premarket, time }) => {
+  const [copied, setCopied] = useState(false);
   const formatNum = (n: any) => typeof n === 'number' ? n.toFixed(2) : '0.00';
+
+  const handleCopy = () => {
+    const text = `
+**Globex Levels - ${time}**
+
+* **Asia Block:** ${formatNum(premarket?.asia_low)} - ${formatNum(premarket?.asia_high)}
+* **London Block:** ${formatNum(premarket?.london_low)} - ${formatNum(premarket?.london_high)} (Range: ${formatNum(premarket?.london_range)})
+* **Overnight:** ${formatNum(premarket?.overnight_low)} - ${formatNum(premarket?.overnight_high)} (Range: ${formatNum(premarket?.overnight_range)})
+
+* **Metrics:**
+  - Compression: ${premarket?.compression_flag ? 'TRUE' : 'FALSE'} (Ratio: ${formatNum(premarket?.compression_ratio)})
+  - SMT: ${premarket?.smt_preopen || 'NEUTRAL'}
+
+* **Reference:**
+  - PDH: ${formatNum(premarket?.previous_day_high)} | PDL: ${formatNum(premarket?.previous_day_low)}
+  - PWH: ${formatNum(premarket?.previous_week_high)} | PWL: ${formatNum(premarket?.previous_week_low)}
+    `.trim();
+
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 pb-4">
+    <div className="space-y-4 animate-in fade-in duration-500 pb-4 relative">
+        <button 
+            onClick={handleCopy}
+            className={`absolute -top-2 right-0 p-1.5 rounded-lg transition-all ${
+                copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Copy Globex Data"
+        >
+            {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+
         {/* Session Blocks */}
-        <div className="grid gap-3">
+        <div className="grid gap-3 mt-2">
              {/* Asia */}
              <div className="bg-amber-500/5 border border-amber-500/20 p-4 rounded-2xl shadow-lg relative overflow-hidden">
                 <div className="flex items-center justify-between mb-2 relative z-10">

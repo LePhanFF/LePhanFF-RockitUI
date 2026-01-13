@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import TPOChart from '../TPOChart';
-import { AlignJustify, AlertOctagon, ArrowUpFromLine, ArrowDownFromLine, BoxSelect, Clock } from 'lucide-react';
+import { AlignJustify, AlertOctagon, ArrowUpFromLine, ArrowDownFromLine, BoxSelect, Clock, Copy, ClipboardCheck } from 'lucide-react';
 
 interface TPOTabProps {
   tpo: any;
@@ -13,6 +13,7 @@ interface TPOTabProps {
 
 const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshots }) => {
   const [timeframe, setTimeframe] = useState<'30m' | '5m'>('30m');
+  const [copied, setCopied] = useState(false);
   
   // Filter history up to current snapshot time
   const historyUpToNow = useMemo(() => {
@@ -28,10 +29,43 @@ const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshot
   const singlePrintsUp = tpo?.single_prints_above_vah || 0;
   const singlePrintsDown = tpo?.single_prints_below_val || 0;
 
+  const handleCopy = () => {
+    const text = `
+**TPO Statistics - ${snapshotTime}**
+
+* **Structure Anomalies:**
+  - Poor High: ${hasPoorHigh ? 'DETECTED' : 'CLEAN'}
+  - Poor Low: ${hasPoorLow ? 'DETECTED' : 'CLEAN'}
+
+* **Single Prints:**
+  - Above VAH: ${singlePrintsUp} Ticks
+  - Below VAL: ${singlePrintsDown} Ticks
+
+* **Profile Values:**
+  - POC: ${tpo?.current_poc}
+  - VAH: ${tpo?.current_vah}
+  - VAL: ${tpo?.current_val}
+    `.trim();
+
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="h-full flex flex-col animate-in fade-in duration-500 gap-4">
+    <div className="h-full flex flex-col animate-in fade-in duration-500 gap-4 relative">
+        <button 
+            onClick={handleCopy}
+            className={`absolute top-0 right-0 p-1.5 rounded-lg transition-all z-20 ${
+                copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Copy TPO Stats"
+        >
+            {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+
         {/* TPO Intelligence Panel */}
-        <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-3xl shrink-0">
+        <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-3xl shrink-0 mt-2">
              <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800/50">
                 <div className="flex items-center gap-2">
                     <BoxSelect className="w-4 h-4 text-indigo-400" />
@@ -39,7 +73,7 @@ const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshot
                 </div>
                 
                 {/* Timeframe Toggles */}
-                <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+                <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 mr-8">
                     <button 
                         onClick={() => setTimeframe('5m')}
                         className={`px-3 py-1 rounded-md text-[9px] font-black uppercase transition-all ${
@@ -107,6 +141,7 @@ const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshot
             <TPOChart 
                 tpoProfile={tpo}
                 volumeProfile={vol?.current_session}
+                ibLevels={{ high: ib?.ib_high, low: ib?.ib_low }}
                 history={historyUpToNow}
                 currentPrice={Number(ib?.current_close)}
                 timeframe={timeframe}

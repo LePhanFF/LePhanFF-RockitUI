@@ -27,6 +27,8 @@ interface DashboardProps {
 
 const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab }) => {
   const input = snapshot?.input;
+  const currentTime = input?.current_et_time || 'N/A';
+  
   const intraday = input?.intraday;
   const core = input?.core_confluences;
   const premarket = input?.premarket;
@@ -61,21 +63,21 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
         <div className="w-[480px] xl:w-[540px] shrink-0 flex flex-col bg-surface/50 border border-border rounded-[2rem] overflow-hidden shadow-2xl min-h-0 transition-colors duration-500">
           <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-background/20">
             
-            {activeTab === 'brief' && <BriefTab output={output} />}
+            {activeTab === 'brief' && <BriefTab output={output} time={currentTime} />}
             
-            {activeTab === 'logic' && <LogicTab core={core} />}
+            {activeTab === 'logic' && <LogicTab core={core} time={currentTime} />}
 
-            {activeTab === 'intraday' && <IntradayTab intraday={intraday} />}
+            {activeTab === 'intraday' && <IntradayTab intraday={intraday} time={currentTime} />}
 
-            {activeTab === 'dpoc' && <DPOCTab dpocData={dpocData} dpocHistory={dpocHistory || []} />}
+            {activeTab === 'dpoc' && <DPOCTab dpocData={dpocData} dpocHistory={dpocHistory || []} time={currentTime} />}
 
-            {activeTab === 'globex' && <GlobexTab premarket={premarket} />}
+            {activeTab === 'globex' && <GlobexTab premarket={premarket} time={currentTime} />}
 
-            {activeTab === 'profile' && <ProfileTab vol={vol} tpo={tpo} />}
+            {activeTab === 'profile' && <ProfileTab vol={vol} tpo={tpo} time={currentTime} />}
 
-            {activeTab === 'tpo' && <TPOTab tpo={tpo} vol={vol} ib={ib} snapshotTime={input?.current_et_time} allSnapshots={allSnapshots} />}
+            {activeTab === 'tpo' && <TPOTab tpo={tpo} vol={vol} ib={ib} snapshotTime={currentTime} allSnapshots={allSnapshots} />}
 
-            {activeTab === 'thinking' && <ThinkingTab thinkingText={thinkingText} />}
+            {activeTab === 'thinking' && <ThinkingTab thinkingText={thinkingText} time={currentTime} />}
 
             {activeTab === 'coach' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">

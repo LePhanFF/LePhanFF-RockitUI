@@ -1,15 +1,55 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { Copy, ClipboardCheck } from 'lucide-react';
 
 interface ProfileTabProps {
   vol: any;
   tpo: any;
+  time: string;
 }
 
-const ProfileTab: React.FC<ProfileTabProps> = ({ vol, tpo }) => {
+const ProfileTab: React.FC<ProfileTabProps> = ({ vol, tpo, time }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    const format = (n: any) => Number(n).toFixed(2);
+    
+    const text = `
+**Volume Profile Stats - ${time}**
+
+* **Current Session:**
+  - POC: ${format(vol?.current_session?.poc)} (TPO POC: ${format(tpo?.current_poc)})
+  - VAH: ${format(vol?.current_session?.vah)}
+  - VAL: ${format(vol?.current_session?.val)}
+  - HVNs: ${vol?.current_session?.hvn_nodes?.join(', ') || 'None'}
+
+* **Previous Day:**
+  - POC: ${format(vol?.previous_day?.poc)}
+  - VAH: ${format(vol?.previous_day?.vah)} | VAL: ${format(vol?.previous_day?.val)}
+
+* **3-Day Composite:**
+  - POC: ${format(vol?.previous_3_days?.poc)}
+  - VAH: ${format(vol?.previous_3_days?.vah)} | VAL: ${format(vol?.previous_3_days?.val)}
+    `.trim();
+
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="space-y-5 animate-in fade-in duration-500 h-full flex flex-col">
-        <div className="grid grid-cols-1 gap-5">
+    <div className="space-y-5 animate-in fade-in duration-500 h-full flex flex-col relative">
+        <button 
+            onClick={handleCopy}
+            className={`absolute -top-2 right-0 p-1.5 rounded-lg transition-all z-20 ${
+                copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Copy Profile Data"
+        >
+            {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+
+        <div className="grid grid-cols-1 gap-5 mt-2">
         {[
             { 
             title: "Current Session", 

@@ -1,10 +1,11 @@
 
-import React from 'react';
-import { Route, Gauge, History, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { Route, Gauge, History, ArrowUpRight, ArrowDownRight, Activity, Copy, ClipboardCheck } from 'lucide-react';
 
 interface DPOCTabProps {
   dpocData: any;
   dpocHistory: any[];
+  time: string;
 }
 
 const getRegimeColor = (regime: string = '') => {
@@ -15,15 +16,52 @@ const getRegimeColor = (regime: string = '') => {
   return 'text-content-muted bg-surface border-border';
 };
 
-const DPOCTab: React.FC<DPOCTabProps> = ({ dpocData, dpocHistory }) => {
+const DPOCTab: React.FC<DPOCTabProps> = ({ dpocData, dpocHistory, time }) => {
+  const [copied, setCopied] = useState(false);
   // Helpers for display
   const direction = dpocData?.direction || dpocData?.migration_direction || 'N/A';
   const netPts = dpocData?.net_migration_pts ?? dpocData?.steps_since_1030 ?? 0;
   const velocity = dpocData?.avg_velocity_per_30min ?? 0;
+
+  const handleCopy = () => {
+    const text = `
+**DPOC Analysis - ${time}**
+
+* **Regime:** ${dpocData?.dpoc_regime?.replace(/_/g, ' ') || 'ANALYZING...'}
+
+* **Vector:**
+  - Direction: ${direction}
+  - Net Migration: ${Number(netPts).toFixed(2)} pts
+  - Velocity: ${Number(velocity).toFixed(2)} / 30m
+
+* **Dynamics:**
+  - Momentum: ${dpocData?.accelerating ? 'Accelerating' : dpocData?.decelerating ? 'Decelerating' : 'Steady'}
+  - Retain %: ${dpocData?.relative_retain_percent || 0}%
+
+* **Signals:**
+  - Stabilizing: ${dpocData?.is_stabilizing ? 'YES' : 'NO'}
+  - Exhausted: ${dpocData?.prior_exhausted ? 'YES' : 'NO'}
+  - Reclaiming Opposite: ${dpocData?.reclaiming_opposite ? 'YES' : 'NO'}
+    `.trim();
+
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 pb-4">
-        <div className={`p-5 rounded-3xl border text-center ${getRegimeColor(dpocData?.dpoc_regime)}`}>
+    <div className="space-y-4 animate-in fade-in duration-500 pb-4 relative">
+        <button 
+            onClick={handleCopy}
+            className={`absolute -top-2 right-0 p-1.5 rounded-lg transition-all ${
+                copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Copy DPOC Data"
+        >
+            {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+
+        <div className={`p-5 rounded-3xl border text-center mt-2 ${getRegimeColor(dpocData?.dpoc_regime)}`}>
             <span className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 mb-2 block">DPOC Regime</span>
             <h2 className="text-lg font-black uppercase tracking-tight leading-none">
             {dpocData?.dpoc_regime?.replace(/_/g, ' ') || 'ANALYZING...'}

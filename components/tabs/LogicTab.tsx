@@ -1,8 +1,10 @@
-import React from 'react';
-import { Info, Shield, GitCommit, Minimize2, Route, MapPin, BarChart3 } from 'lucide-react';
+
+import React, { useState } from 'react';
+import { Info, Shield, GitCommit, Minimize2, Route, MapPin, BarChart3, Copy, ClipboardCheck } from 'lucide-react';
 
 interface LogicTabProps {
   core: any;
+  time: string;
 }
 
 const getBiasColor = (bias: string) => {
@@ -13,11 +15,59 @@ const getBiasColor = (bias: string) => {
   return 'text-content-muted';
 };
 
-const LogicTab: React.FC<LogicTabProps> = ({ core }) => {
+const LogicTab: React.FC<LogicTabProps> = ({ core, time }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    const text = `
+**Logic Confluences - ${time}**
+
+* **IB Acceptance:**
+  - Above IBH: ${core?.ib_acceptance?.close_above_ibh ? 'YES' : 'NO'}
+  - Below IBL: ${core?.ib_acceptance?.close_below_ibl ? 'YES' : 'NO'}
+  - Acc. Higher: ${core?.ib_acceptance?.price_accepted_higher || 'NO'}
+  - Acc. Lower: ${core?.ib_acceptance?.price_accepted_lower || 'NO'}
+
+* **TPO Signals:**
+  - Single Prints Above: ${core?.tpo_signals?.single_prints_above ? 'YES' : 'NO'}
+  - Single Prints Below: ${core?.tpo_signals?.single_prints_below ? 'YES' : 'NO'}
+  - Fattening Upper: ${core?.tpo_signals?.fattening_upper ? 'YES' : 'NO'}
+  - Fattening Lower: ${core?.tpo_signals?.fattening_lower ? 'YES' : 'NO'}
+
+* **DPOC Position:**
+  - Above IBH: ${core?.dpoc_vs_ib?.dpoc_above_ibh ? 'YES' : 'NO'}
+  - Below IBL: ${core?.dpoc_vs_ib?.dpoc_below_ibl ? 'YES' : 'NO'}
+
+* **Compression:**
+  - Against VAH: ${core?.dpoc_compression?.compressing_against_vah ? 'YES' : 'NO'}
+  - Against VAL: ${core?.dpoc_compression?.compressing_against_val ? 'YES' : 'NO'}
+  - Bias: ${core?.dpoc_compression?.compression_bias || 'NONE'}
+
+* **Context:**
+  - Location: ${core?.price_location?.location_label?.replace(/_/g, ' ') || 'UNKNOWN'}
+  - Migration Dir: ${core?.migration?.net_direction || 'FLAT'}
+  - Net Pts (10:30): ${core?.migration?.pts_since_1030 || '0'}
+    `.trim();
+
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 pb-4">
+    <div className="space-y-4 animate-in fade-in duration-500 pb-4 relative">
+      <button 
+        onClick={handleCopy}
+        className={`absolute -top-2 right-0 p-1.5 rounded-lg transition-all ${
+            copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-white hover:bg-slate-800'
+        }`}
+        title="Copy Logic"
+      >
+        {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+      </button>
+
       {core?.note && (
-        <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl flex items-start gap-3">
+        <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-2xl flex items-start gap-3 mt-2">
             <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
             <p className="text-xs font-mono font-medium text-indigo-200 leading-relaxed italic">"{core.note}"</p>
         </div>

@@ -37,7 +37,9 @@ import {
   Key,
   Lightbulb,
   GraduationCap,
-  Map
+  Map,
+  Link,
+  Check
 } from 'lucide-react';
 
 // --- CONFIGURATION ---
@@ -185,6 +187,7 @@ const App: React.FC = () => {
   const [lastFetchStatus, setLastFetchStatus] = useState<string>("");
 
   const [activeTab, setActiveTab] = useState<string>('brief');
+  const [urlCopied, setUrlCopied] = useState(false);
 
   const autoScrollEnabled = useRef(true);
   const lastLatestTimeRef = useRef<string | null>(null);
@@ -224,7 +227,7 @@ const App: React.FC = () => {
     }
   };
 
-  const handleFileSelect = async (fileName: string, isUpdate = false) => {
+  const handleFileSelect = async (fileName: string, isUpdate = false, targetTime?: string) => {
     if (!isUpdate) setSelectedFile(fileName);
     setIsLoading(true);
     
@@ -267,14 +270,28 @@ const App: React.FC = () => {
         const latestTime = latestItem?.input?.current_et_time;
 
         if (latestTime && latestTime !== lastLatestTimeRef.current) {
-            playUpdateSound();
+            if (!targetTime) playUpdateSound(); // Don't play sound on deep link load
             lastLatestTimeRef.current = latestTime;
         }
 
         setSnapshots(newSnapshots);
-        if (isUpdate || autoScrollEnabled.current) {
-          setSelectedIndex(newSnapshots.length - 1);
+        
+        if (targetTime) {
+            // DEEP LINK MODE: Select specific time slice
+            const targetIdx = newSnapshots.findIndex(s => s.input.current_et_time === targetTime);
+            if (targetIdx !== -1) {
+                setSelectedIndex(targetIdx);
+                autoScrollEnabled.current = false;
+                addLog(`Deep Link: Jumped to ${targetTime}`);
+            } else {
+                addLog(`Deep Link Warning: Time ${targetTime} not found. Defaulting to latest.`);
+                setSelectedIndex(newSnapshots.length - 1);
+            }
+        } else if (isUpdate || autoScrollEnabled.current) {
+            // STANDARD MODE: Auto-scroll to bottom
+            setSelectedIndex(newSnapshots.length - 1);
         }
+        
         setErrorMsg(null);
       } else {
         setErrorMsg("Selected file is empty");
@@ -335,13 +352,15 @@ const App: React.FC = () => {
       setAvailableFiles(files);
       setConnectionStatus('connected');
       
+      // Initial Load Logic (Check for currentFile to prevent overwrite during deep link)
       const currentFile = selectedFileRef.current;
       
       if (!currentFile && files.length > 0) {
         handleFileSelect(files[0], true);
         setSelectedFile(files[0]);
       } else if (currentFile) {
-        handleFileSelect(currentFile, true);
+        // If deep link already set the file, don't re-fetch here unless update is needed
+        // But for auto-refresh list, we might want to just update the list UI
       }
 
     } catch (err: any) {
@@ -359,9 +378,28 @@ const App: React.FC = () => {
     }
   };
 
+  // INITIALIZATION & DEEP LINK HANDLER
   useEffect(() => {
     if (isAuthenticated) {
-      fetchFileList();
+        const params = new URLSearchParams(window.location.search);
+        const urlFile = params.get('file');
+        const urlTime = params.get('time');
+
+        if (urlFile) {
+            // 1. DEEP LINK DETECTED
+            addLog(`Deep Link Detected: File=${urlFile}, Time=${urlTime}`);
+            setIsPaused(true); // Pause auto-refresh immediately so user can study the specific slice
+            setSelectedFile(urlFile);
+            
+            // Fetch specific file + time slice immediately
+            handleFileSelect(urlFile, false, urlTime || undefined);
+            
+            // Fetch sidebar list in background so navigation still works
+            fetchFileList(true);
+        } else {
+            // 2. STANDARD BOOT
+            fetchFileList();
+        }
     }
   }, [isAuthenticated]); 
 
@@ -371,7 +409,12 @@ const App: React.FC = () => {
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          fetchFileList(true);
+          // If a file is selected, update it. If not, refresh list.
+          if (selectedFileRef.current) {
+              handleFileSelect(selectedFileRef.current, true);
+          } else {
+              fetchFileList(true);
+          }
           return REFRESH_INTERVAL_SEC;
         }
         return prev - 1;
@@ -379,6 +422,51 @@ const App: React.FC = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [isPaused, isAuthenticated]);
+
+  const handleShareUrl = () => {
+      if (!selectedFile || !currentSnapshot) return;
+      
+      const currentTime = currentSnapshot.input.current_et_time;
+      
+      try {
+        let urlString = window.location.href;
+        
+        // 1. Strip 'blob:' prefix if present (WebContainer environments)
+        if (urlString.startsWith('blob:')) {
+            urlString = urlString.slice(5);
+        }
+
+        // 2. Aggressively fix Double URL/Proxy artifacts
+        // If the URL looks like "https://host/https://host/...", grab the last occurrence.
+        const httpRegex = /https?:\/\//g;
+        const matches = [...urlString.matchAll(httpRegex)];
+        
+        if (matches.length > 1) {
+             const lastMatchIndex = matches[matches.length - 1].index;
+             if (lastMatchIndex !== undefined) {
+                 urlString = urlString.substring(lastMatchIndex);
+             }
+        }
+
+        const url = new URL(urlString);
+        url.searchParams.set('file', selectedFile);
+        url.searchParams.set('time', currentTime);
+        
+        const shareUrl = url.toString();
+        
+        navigator.clipboard.writeText(shareUrl).then(() => {
+            setUrlCopied(true);
+            setTimeout(() => setUrlCopied(false), 2000);
+            addLog(`Link Copied: ${currentTime}`);
+        }).catch(err => {
+            console.error("Clipboard write failed", err);
+            addLog("Clipboard Blocked - Check Console");
+        });
+      } catch (e) {
+        console.error("URL Generation Failed", e);
+        addLog("Link Gen Failed");
+      }
+  };
 
   const processedSnapshots = useMemo(() => {
     return snapshots.map(s => {
@@ -561,6 +649,19 @@ const App: React.FC = () => {
            )}
            
            <div className="flex items-center gap-2">
+               {/* Share Button */}
+               <button 
+                  onClick={handleShareUrl} 
+                  className={`p-2 rounded-full border transition-all ${
+                      urlCopied 
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' 
+                        : 'bg-surface border-border text-content-muted hover:text-accent hover:border-accent'
+                  }`} 
+                  title="Share Snapshot URL"
+               >
+                  {urlCopied ? <Check className="w-4 h-4" /> : <Link className="w-4 h-4" />}
+               </button>
+
                {/* THEME TOGGLE */}
                <button onClick={cycleTheme} className="p-2 rounded-full bg-surface border border-border text-content-muted hover:text-accent transition-colors" title={`Theme: ${theme.toUpperCase()}`}>
                   <Palette className="w-4 h-4" />

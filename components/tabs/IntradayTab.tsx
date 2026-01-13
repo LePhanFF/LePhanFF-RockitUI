@@ -1,12 +1,14 @@
 
-import React from 'react';
-import { Shield, Activity, Move, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield, Activity, Move, Zap, Copy, ClipboardCheck } from 'lucide-react';
 
 interface IntradayTabProps {
   intraday: any;
+  time: string;
 }
 
-const IntradayTab: React.FC<IntradayTabProps> = ({ intraday }) => {
+const IntradayTab: React.FC<IntradayTabProps> = ({ intraday, time }) => {
+  const [copied, setCopied] = useState(false);
   const ib = intraday?.ib;
   const wicks = intraday?.wick_parade;
   const fvgs = intraday?.fvg_detection;
@@ -14,9 +16,56 @@ const IntradayTab: React.FC<IntradayTabProps> = ({ intraday }) => {
   const formatNum = (val: any) => typeof val === 'number' ? val.toFixed(2) : '0.00';
   const formatVol = (val: any) => typeof val === 'number' ? val.toLocaleString() : '0';
 
+  const handleCopy = () => {
+    const activeFvgs = [
+        ...(fvgs?.['1h_fvg'] || []),
+        ...(fvgs?.['15min_fvg'] || []),
+        ...(fvgs?.['5min_fvg'] || [])
+    ].map((f: any) => `[${f.bottom}-${f.top} ${f.type}]`).join(', ') || 'None';
+
+    const text = `
+**Intraday Stats - ${time}**
+
+* **Initial Balance:**
+  - High: ${formatNum(ib?.ib_high)}
+  - Low: ${formatNum(ib?.ib_low)}
+  - Status: ${ib?.ib_status}
+
+* **Context:**
+  - Vs IB: ${ib?.price_vs_ib}
+  - Vs VWAP: ${ib?.price_vs_vwap}
+  - EMA20: ${formatNum(ib?.ema20)} | EMA50: ${formatNum(ib?.ema50)}
+
+* **Technicals:**
+  - RSI: ${formatNum(ib?.rsi14)}
+  - ATR: ${formatNum(ib?.atr14)}
+  - Volume: ${formatVol(ib?.current_volume)}
+
+* **Wick Parade:**
+  - Bull: ${wicks?.bullish_wick_parade_count}
+  - Bear: ${wicks?.bearish_wick_parade_count}
+
+* **Active FVGs:** ${activeFvgs}
+    `.trim();
+
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
-    <div className="space-y-4 animate-in fade-in duration-500 pb-4">
-        <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg relative overflow-hidden">
+    <div className="space-y-4 animate-in fade-in duration-500 pb-4 relative">
+        <button 
+            onClick={handleCopy}
+            className={`absolute -top-2 right-0 p-1.5 rounded-lg transition-all ${
+                copied ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 hover:text-white hover:bg-slate-800'
+            }`}
+            title="Copy Intraday Data"
+        >
+            {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        </button>
+
+        <div className="bg-slate-900/60 border border-slate-800 p-6 rounded-3xl shadow-lg relative overflow-hidden mt-2">
             <div className="flex items-center gap-3 mb-5 border-b border-slate-800/50 pb-3">
             <Shield className="w-5 h-5 text-orange-400" />
             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Initial Balance</span>

@@ -17,7 +17,9 @@ import {
   GraduationCap,
   HardDrive,
   Database,
-  Check
+  Check,
+  Copy,
+  ClipboardCheck
 } from 'lucide-react';
 
 interface GeminiAuditProps {
@@ -54,6 +56,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [customQuery, setCustomQuery] = useState('');
+  const [copied, setCopied] = useState(false);
   
   // Data State
   const [categorizedQuestions, setCategorizedQuestions] = useState<Record<string, string[]>>({});
@@ -112,6 +115,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
     setLoading(true);
     setError(null);
     setReport('');
+    setCopied(false);
 
     try {
       // 1. Condense Data for Context Window (Using strictly history up to now)
@@ -181,7 +185,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
 
       // 4. Call API
       const responseStream = await ai.models.generateContentStream({
-        model: 'gemini-3-pro-preview', // Pro model is essential for large context
+        model: 'gemini-3-flash-preview',
         contents: [
             { role: 'user', parts: [{ text: prompt }] }
         ],
@@ -203,6 +207,13 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopy = () => {
+      if (!report) return;
+      navigator.clipboard.writeText(report);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
   };
 
   // Improved Markdown Renderer with Larger Fonts
@@ -380,11 +391,28 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
         {/* Report Content */}
         {report && (
             <div className="max-w-5xl mx-auto space-y-2 animate-in fade-in slide-in-from-bottom-6 duration-700 pb-20">
-                <div className="flex items-center gap-3 mb-10 opacity-60 border-b border-slate-800 pb-4">
-                    <Clock className="w-4 h-4 text-slate-500" />
-                    <span className="text-xs font-mono text-slate-500 uppercase font-bold tracking-wider">
-                        {customQuery ? 'Custom Query Response' : `Session Review • ${currentSnapshot?.input?.current_et_time}`}
-                    </span>
+                <div className="flex items-center justify-between mb-10 border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-3 opacity-60">
+                        <Clock className="w-4 h-4 text-slate-500" />
+                        <span className="text-xs font-mono text-slate-500 uppercase font-bold tracking-wider">
+                            {customQuery ? 'Custom Query Response' : `Session Review • ${currentSnapshot?.input?.current_et_time}`}
+                        </span>
+                    </div>
+                    
+                    <button 
+                        onClick={handleCopy}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                            copied 
+                                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' 
+                                : 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 hover:bg-indigo-500/30'
+                        }`}
+                        title="Copy report to clipboard (Notion Ready)"
+                    >
+                        {copied ? <ClipboardCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                        <span className="text-[10px] font-black uppercase tracking-widest">
+                            {copied ? 'Copied' : 'Copy'}
+                        </span>
+                    </button>
                 </div>
                 
                 <div className="prose prose-invert prose-headings:font-black prose-p:text-slate-300 max-w-none">
