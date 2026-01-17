@@ -23,9 +23,11 @@ interface DashboardProps {
   output: DecodedOutput | null;
   allSnapshots?: MarketSnapshot[];
   activeTab: string;
+  isGlobalChatOpen?: boolean; 
+  htfData?: any; 
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab }) => {
+const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab, isGlobalChatOpen = false, htfData }) => {
   const input = snapshot?.input;
   const currentTime = input?.current_et_time || 'N/A';
   
@@ -45,15 +47,12 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
       ? snapshot.output.split('<think>')[1].split('</think>')[0] 
       : null);
 
-  // --- SPECIAL JSON EXPLORER VIEW ---
   if (activeTab === 'json') {
     return <JsonExplorer snapshot={snapshot} thinkingText={thinkingText} />;
   }
 
-  // --- STANDARD DASHBOARD LAYOUT ---
   return (
     <div className="flex flex-col h-full gap-4 overflow-hidden">
-      {/* Standard Chart + Sidebar Layout */}
       <div className="flex-1 flex gap-4 overflow-hidden min-h-0">
         
         {/* Left Side: Chart Section */}
@@ -64,30 +63,28 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
           <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-background/20">
             
             {activeTab === 'brief' && <BriefTab output={output} time={currentTime} />}
-            
             {activeTab === 'logic' && <LogicTab core={core} time={currentTime} />}
-
             {activeTab === 'intraday' && <IntradayTab intraday={intraday} time={currentTime} />}
-
             {activeTab === 'dpoc' && <DPOCTab dpocData={dpocData} dpocHistory={dpocHistory || []} time={currentTime} />}
-
             {activeTab === 'globex' && <GlobexTab premarket={premarket} time={currentTime} />}
-
             {activeTab === 'profile' && <ProfileTab vol={vol} tpo={tpo} time={currentTime} />}
-
             {activeTab === 'tpo' && <TPOTab tpo={tpo} vol={vol} ib={ib} snapshotTime={currentTime} allSnapshots={allSnapshots} />}
-
             {activeTab === 'thinking' && <ThinkingTab thinkingText={thinkingText} time={currentTime} />}
 
             {activeTab === 'coach' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <GeminiAudit snapshots={allSnapshots} currentSnapshot={snapshot} />
+                 <GeminiAudit snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} />
                </div>
             )}
 
             {activeTab === 'htf-coach' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <HTFCoach snapshots={allSnapshots} currentSnapshot={snapshot} />
+                 <HTFCoach 
+                    snapshots={allSnapshots} 
+                    currentSnapshot={snapshot} 
+                    isGlobalChatOpen={isGlobalChatOpen} 
+                    externalHtfData={htfData} 
+                 />
                </div>
             )}
 
@@ -99,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
              {activeTab === 'trade-idea' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <TradeIdea snapshots={allSnapshots} currentSnapshot={snapshot} />
+                 <TradeIdea snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} />
                </div>
             )}
 

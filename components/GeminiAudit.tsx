@@ -19,17 +19,21 @@ import {
   Database,
   Check,
   Copy,
-  ClipboardCheck
+  ClipboardCheck,
+  Ban
 } from 'lucide-react';
+import ChatPanel from './ChatPanel';
 
 interface GeminiAuditProps {
   snapshots: MarketSnapshot[];
   currentSnapshot: MarketSnapshot;
+  isGlobalChatOpen?: boolean;
 }
 
 // URLs
 const QUESTIONS_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-questions.json";
-const GROK_MEMORY_URL = "https://storage.googleapis.com/rockit-data/inference/grok-memory.md"; // Upload your text/json export here
+const GROK_MEMORY_URL = "https://storage.googleapis.com/rockit-data/inference/grok-memory.md";
+const PSYCH_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-psychology.md";
 
 const DEFAULT_QUESTIONS = {
   "Session Structure": [
@@ -51,7 +55,7 @@ const DEFAULT_QUESTIONS = {
   ]
 };
 
-const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot }) => {
+const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +65,14 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
   // Data State
   const [categorizedQuestions, setCategorizedQuestions] = useState<Record<string, string[]>>({});
   const [grokMemory, setGrokMemory] = useState<string | null>(null);
+  const [psychContent, setPsychContent] = useState<string>('');
   
   // Control State
   const [useGrokMemory, setUseGrokMemory] = useState(false); // Default OFF
+
+  // Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [lastContext, setLastContext] = useState<string>('');
 
   // Point-in-time logic: Filter snapshots to only include data up to current time
   const historyPointInTime = useMemo(() => {
@@ -75,7 +84,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
         .sort((a, b) => a.input.current_et_time.localeCompare(b.input.current_et_time));
   }, [snapshots, currentSnapshot]);
 
-  // Fetch questions AND Memory on mount
+  // Fetch data on mount
   useEffect(() => {
     const initData = async () => {
         const cacheBuster = Date.now();
@@ -102,6 +111,17 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
         } catch (e) {
             console.warn("No Grok memory found (optional).");
         }
+
+        // 3. Fetch Psychology Protocol
+        try {
+            const psychRes = await fetch(`${PSYCH_URL}?cb=${cacheBuster}`);
+            if (psychRes.ok) {
+                const text = await psychRes.text();
+                if (text.length > 50) setPsychContent(text);
+            }
+        } catch (e) {
+            console.warn("No Psychology Protocol found.");
+        }
     };
     initData();
   }, []);
@@ -116,6 +136,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
     setError(null);
     setReport('');
     setCopied(false);
+    setIsChatOpen(false); // Reset chat context
 
     try {
       // 1. Condense Data for Context Window (Using strictly history up to now)
@@ -132,7 +153,7 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
       // 2. Initialize Gemini
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // 3. Construct Prompt
+      // 3. Construct Prompt (Psychology moved to END)
       let prompt = `
         You are a master Market Profile trading coach and psychologist.
         
@@ -148,6 +169,11 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
 
         SESSION DATA HISTORY:
         ${JSON.stringify(contextData)}
+
+        ---------------------------------------------------------
+        🧘 PSYCHOLOGY PROTOCOL (TRADER SUPPORT):
+        ${psychContent || "No Psychology Protocol Loaded."}
+        ---------------------------------------------------------
       `;
 
       if (customQuery.trim()) {
@@ -155,9 +181,9 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
           USER QUESTION: "${customQuery}"
 
           INSTRUCTIONS:
-          1. Reference the "Grok Experience" memory if relevant patterns exist (e.g., "This looks like the trap we saw on Day 45...").
-          2. Answer the user's specific question based strictly on the provided SESSION DATA up to ${currentSnapshot?.input?.current_et_time}.
-          3. Use professional trading terminology (Market Profile, Auction Theory).
+          1. Reference the "Grok Experience" memory if relevant patterns exist.
+          2. Use the "Psychology Protocol" to detect signs of tilt, fear, or greed in the user's question or market conditions.
+          3. Answer specifically based on the SESSION DATA up to ${currentSnapshot?.input?.current_et_time}.
           4. Format the response in clear Markdown with bold key terms.
         `;
       } else {
@@ -182,6 +208,8 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
           *   **Actionable Insight:** One key thing to watch for in the next 30 minutes.
         `;
       }
+
+      setLastContext(prompt);
 
       // 4. Call API
       const responseStream = await ai.models.generateContentStream({
@@ -281,6 +309,21 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
                     </div>
                 </div>
             </div>
+            {!loading && report && (
+                <button 
+                    onClick={() => !isGlobalChatOpen && setIsChatOpen(!isChatOpen)}
+                    disabled={isGlobalChatOpen}
+                    className={`flex items-center gap-2 px-4 py-3 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg ${
+                        isGlobalChatOpen 
+                            ? 'bg-slate-800 cursor-not-allowed opacity-50' 
+                            : 'bg-indigo-600 hover:bg-indigo-500'
+                    }`}
+                    title={isGlobalChatOpen ? "Disabled: Global Chat Active" : "Open Local Chat"}
+                >
+                    {isGlobalChatOpen ? <Ban className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                    <span>Chat</span>
+                </button>
+            )}
         </div>
 
         {/* Question Selector & Input Row */}
@@ -342,6 +385,15 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot })
             </div>
         </div>
       </div>
+
+      {/* CHAT PANEL */}
+      <ChatPanel 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        title="Coach's Corner"
+        contextData={lastContext}
+        initialReport={report}
+      />
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-950/30 relative">

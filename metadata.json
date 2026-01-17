@@ -1,5 +1,8 @@
 {
   "name": "ROCKIT Market Intelligence Dashboard",
   "description": "A high-performance trading dashboard visualizing premarket data, intraday technicals, volume/TPO profiles, and AI-driven market bias analysis.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
 }

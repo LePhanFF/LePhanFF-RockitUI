@@ -2,161 +2,15 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
+import ChatPanel from './components/ChatPanel';
 import { useTheme } from './components/ThemeContext';
-import { 
-  Clock, 
-  LayoutDashboard, 
-  Cloud, 
-  RefreshCw, 
-  Timer,
-  AlertCircle,
-  Cpu,
-  FileText,
-  Loader2,
-  TerminalSquare,
-  Activity,
-  Network,
-  Pause,
-  Info,
-  Waypoints,
-  Globe,
-  BarChartHorizontal,
-  Grid3X3,
-  Brain,
-  ArrowUpRight,
-  ArrowDownRight,
-  Target,
-  LogOut,
-  Lock,
-  ChevronRight,
-  User,
-  FileSearch,
-  Rocket,
-  FileJson,
-  Palette,
-  Key,
-  Lightbulb,
-  GraduationCap,
-  Map,
-  Link,
-  Check
-} from 'lucide-react';
+import { LoginScreen } from './components/LoginScreen';
+import { Sidebar } from './components/Sidebar';
+import { AppHeader } from './components/AppHeader';
+import { GCS_BUCKET_BASE, PLAYBOOK_URL, PSYCH_URL, hardenedClean, salvageIntel } from './utils/dataHelpers';
+import { Loader2, TerminalSquare, Activity, Network, AlertCircle } from 'lucide-react';
 
-// --- CONFIGURATION ---
-const GCS_BUCKET_BASE = "https://storage.googleapis.com/rockit-data"; 
 const REFRESH_INTERVAL_SEC = 30; 
-const ACCESS_CODE = "hello123";
-
-const hardenedClean = (raw: string): string => {
-  if (!raw) return "";
-  let text = raw.trim();
-  text = text.replace(/```json/gi, "").replace(/```/g, "");
-  text = text.replace(/<think>[\s\S]*?<\/think>/gi, ""); 
-  
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace === -1 || lastBrace === -1) return text;
-  text = text.substring(firstBrace, lastBrace + 1);
-  return text.replace(/\n/g, " ").trim();
-};
-
-const salvageIntel = (raw: string): Partial<DecodedOutput> => {
-  const salvaged: any = {
-    bias: "NEUTRAL",
-    confidence: "0%",
-    one_liner: "Decoding market stream...",
-    day_type_reasoning: []
-  };
-  
-  try {
-    const biasMatch = raw.match(/"bias"\s*:\s*"(.*?)"/i);
-    if (biasMatch) salvaged.bias = biasMatch[1].trim().toUpperCase();
-    const narrativeMatch = raw.match(/"(?:one_liner|narrative|summary)"\s*:\s*"(.*?)"/i);
-    if (narrativeMatch) salvaged.one_liner = narrativeMatch[1].trim();
-    const reasonMatch = raw.match(/"(?:day_type_reasoning|evidence|reasoning)"\s*:\s*\[([\s\S]*?)\]/i);
-    if (reasonMatch) {
-      const items = reasonMatch[1].match(/"(.*?)"/g);
-      if (items) salvaged.day_type_reasoning = items.map(i => i.replace(/"/g, ''));
-    }
-    const confMatch = raw.match(/"confidence"\s*:\s*"(.*?)"/i);
-    if (confMatch) salvaged.confidence = confMatch[1].trim();
-  } catch (e) {
-    console.warn("Salvage failed");
-  }
-  return salvaged;
-};
-
-const LoginScreen: React.FC<{ onLogin: () => void }> = ({ onLogin }) => {
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === ACCESS_CODE) {
-      onLogin();
-    } else {
-      setError(true);
-      setPassword("");
-    }
-  };
-
-  return (
-    <div className="h-screen w-screen bg-background flex flex-col items-center justify-center relative overflow-hidden transition-colors duration-500">
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/10 rounded-full blur-[120px] animate-pulse"></div>
-      </div>
-      
-      <div className="relative z-10 bg-surface/60 border border-border p-12 rounded-[2.5rem] shadow-2xl backdrop-blur-xl flex flex-col items-center max-w-md w-full text-center">
-        <div className="p-4 bg-background rounded-2xl border border-border mb-8 shadow-xl">
-           <LayoutDashboard className="w-12 h-12 text-accent" />
-        </div>
-        
-        <h1 className="text-3xl font-black italic tracking-tighter text-content uppercase mb-2">
-          ROCKIT <span className="text-accent">ENGINE</span>
-        </h1>
-        <p className="text-xs font-mono text-content-muted tracking-[0.3em] uppercase mb-10">
-          Intelligence Protocol Access
-        </p>
-
-        <form onSubmit={handleSubmit} className="w-full max-w-xs space-y-4">
-           <div className="relative group">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                 <Key className={`w-4 h-4 ${error ? 'text-rose-500' : 'text-content-muted group-focus-within:text-accent'} transition-colors`} />
-              </div>
-              <input 
-                type="password"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(false); }}
-                className={`w-full bg-background/50 border ${error ? 'border-rose-500/50 focus:border-rose-500' : 'border-border focus:border-accent'} text-content text-sm rounded-xl py-3 pl-10 pr-4 outline-none transition-all placeholder:text-content-muted font-mono tracking-widest`}
-                placeholder="ENTER ACCESS CODE"
-                autoFocus
-              />
-           </div>
-           
-           <button 
-             type="submit"
-             className="w-full bg-accent hover:opacity-90 text-white font-black uppercase tracking-widest text-xs py-3 rounded-xl transition-all shadow-[0_0_20px_var(--accent-glow)] flex items-center justify-center gap-2 group"
-           >
-             <span>Initialize Uplink</span>
-             <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
-           </button>
-        </form>
-        
-        {error && (
-           <div className="mt-4 flex items-center gap-2 text-[10px] text-rose-500 font-bold uppercase tracking-wider animate-in fade-in slide-in-from-top-1">
-              <AlertCircle className="w-3 h-3" />
-              <span>Access Denied: Invalid Credentials</span>
-           </div>
-        )}
-
-        <div className="flex items-center gap-2 text-[10px] text-content-muted font-bold uppercase tracking-widest mt-8">
-          <Lock className="w-3 h-3" />
-          <span>Restricted Environment</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const App: React.FC = () => {
   const { theme, cycleTheme } = useTheme();
@@ -170,6 +24,8 @@ const App: React.FC = () => {
   const [availableFiles, setAvailableFiles] = useState<string[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   
+  const [htfData, setHtfData] = useState<{es: any[], nq: any[], ym: any[]} | null>(null);
+
   const selectedFileRef = useRef<string | null>(null);
   useEffect(() => {
     selectedFileRef.current = selectedFile;
@@ -189,8 +45,29 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('brief');
   const [urlCopied, setUrlCopied] = useState(false);
 
+  // Global Chat State
+  const [isGlobalChatOpen, setIsGlobalChatOpen] = useState(false);
+  const [playbookContent, setPlaybookContent] = useState<string>('');
+  const [psychContent, setPsychContent] = useState<string>('');
+
   const autoScrollEnabled = useRef(true);
   const lastLatestTimeRef = useRef<string | null>(null);
+
+  // 1. Fetch Playbook
+  useEffect(() => {
+    fetch(`${PLAYBOOK_URL}?cb=${Date.now()}`)
+      .then(r => r.text())
+      .then(t => setPlaybookContent(t))
+      .catch(e => console.warn("Global Chat: Playbook fetch failed", e));
+  }, []);
+
+  // 2. Fetch Psychology Protocol
+  useEffect(() => {
+    fetch(`${PSYCH_URL}?cb=${Date.now()}`)
+      .then(r => r.text())
+      .then(t => setPsychContent(t))
+      .catch(e => console.warn("Global Chat: Psychology fetch failed", e));
+  }, []);
 
   const handleLogout = () => {
     setIsAuthenticated(false);
@@ -204,9 +81,9 @@ const App: React.FC = () => {
 
   const playUpdateSound = () => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
+      const AudioContextConstructor = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextConstructor) return;
+      const ctx = new AudioContextConstructor();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       
@@ -270,14 +147,13 @@ const App: React.FC = () => {
         const latestTime = latestItem?.input?.current_et_time;
 
         if (latestTime && latestTime !== lastLatestTimeRef.current) {
-            if (!targetTime) playUpdateSound(); // Don't play sound on deep link load
+            if (!targetTime) playUpdateSound(); 
             lastLatestTimeRef.current = latestTime;
         }
 
         setSnapshots(newSnapshots);
         
         if (targetTime) {
-            // DEEP LINK MODE: Select specific time slice
             const targetIdx = newSnapshots.findIndex(s => s.input.current_et_time === targetTime);
             if (targetIdx !== -1) {
                 setSelectedIndex(targetIdx);
@@ -288,7 +164,6 @@ const App: React.FC = () => {
                 setSelectedIndex(newSnapshots.length - 1);
             }
         } else if (isUpdate || autoScrollEnabled.current) {
-            // STANDARD MODE: Auto-scroll to bottom
             setSelectedIndex(newSnapshots.length - 1);
         }
         
@@ -322,11 +197,6 @@ const App: React.FC = () => {
       }
 
       const text = await res.text();
-      
-      if (text.trim().startsWith("<!DOCTYPE html") || text.includes("<html")) {
-        addLog("WARN: Response appears to be HTML (Auth/UI page?)");
-      }
-
       const files: string[] = [];
       const parser = new DOMParser();
       const xmlDoc = parser.parseFromString(text, "text/xml");
@@ -334,7 +204,6 @@ const App: React.FC = () => {
       
       for (let i = 0; i < contents.length; i++) {
         const key = contents[i].getElementsByTagName("Key")[0]?.textContent;
-        // Logic: Must be .jsonl AND NOT in 'inference/' subfolder
         if (key && key.endsWith('.jsonl') && !key.includes('inference/') && !key.endsWith('/')) {
            files.push(key);
         }
@@ -342,35 +211,20 @@ const App: React.FC = () => {
 
       files.sort().reverse();
       
-      if (files.length === 0) {
-        if (contents.length === 0 && (text.includes("<html") || text.includes("<!DOCTYPE"))) {
-           throw new Error("Received HTML instead of XML bucket listing.");
-        }
-        throw new Error("No .jsonl files found in bucket root.");
-      }
+      if (files.length === 0) throw new Error("No .jsonl files found in bucket root.");
 
       setAvailableFiles(files);
       setConnectionStatus('connected');
       
-      // Initial Load Logic (Check for currentFile to prevent overwrite during deep link)
       const currentFile = selectedFileRef.current;
-      
       if (!currentFile && files.length > 0) {
         handleFileSelect(files[0], true);
         setSelectedFile(files[0]);
-      } else if (currentFile) {
-        // If deep link already set the file, don't re-fetch here unless update is needed
-        // But for auto-refresh list, we might want to just update the list UI
       }
 
     } catch (err: any) {
       if (!isAutoRefresh) addLog(`ERROR: ${err.message}`);
-      
       let displayMsg = err.message || "Failed to list bucket contents";
-      if (displayMsg === "Failed to fetch") {
-        displayMsg = "CORS/Network Error. Bucket likely blocks this origin.";
-      }
-
       setConnectionStatus('error');
       setErrorMsg(displayMsg);
     } finally {
@@ -378,7 +232,6 @@ const App: React.FC = () => {
     }
   };
 
-  // INITIALIZATION & DEEP LINK HANDLER
   useEffect(() => {
     if (isAuthenticated) {
         const params = new URLSearchParams(window.location.search);
@@ -386,18 +239,12 @@ const App: React.FC = () => {
         const urlTime = params.get('time');
 
         if (urlFile) {
-            // 1. DEEP LINK DETECTED
             addLog(`Deep Link Detected: File=${urlFile}, Time=${urlTime}`);
-            setIsPaused(true); // Pause auto-refresh immediately so user can study the specific slice
+            setIsPaused(true);
             setSelectedFile(urlFile);
-            
-            // Fetch specific file + time slice immediately
             handleFileSelect(urlFile, false, urlTime || undefined);
-            
-            // Fetch sidebar list in background so navigation still works
             fetchFileList(true);
         } else {
-            // 2. STANDARD BOOT
             fetchFileList();
         }
     }
@@ -405,11 +252,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (isPaused || !isAuthenticated) return;
-
     const timer = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
-          // If a file is selected, update it. If not, refresh list.
           if (selectedFileRef.current) {
               handleFileSelect(selectedFileRef.current, true);
           } else {
@@ -425,36 +270,21 @@ const App: React.FC = () => {
 
   const handleShareUrl = () => {
       if (!selectedFile || !currentSnapshot) return;
-      
       const currentTime = currentSnapshot.input.current_et_time;
-      
       try {
         let urlString = window.location.href;
-        
-        // 1. Strip 'blob:' prefix if present (WebContainer environments)
-        if (urlString.startsWith('blob:')) {
-            urlString = urlString.slice(5);
-        }
-
-        // 2. Aggressively fix Double URL/Proxy artifacts
-        // If the URL looks like "https://host/https://host/...", grab the last occurrence.
+        if (urlString.startsWith('blob:')) urlString = urlString.slice(5);
         const httpRegex = /https?:\/\//g;
         const matches = [...urlString.matchAll(httpRegex)];
-        
         if (matches.length > 1) {
              const lastMatchIndex = matches[matches.length - 1].index;
-             if (lastMatchIndex !== undefined) {
-                 urlString = urlString.substring(lastMatchIndex);
-             }
+             if (lastMatchIndex !== undefined) urlString = urlString.substring(lastMatchIndex);
         }
-
         const url = new URL(urlString);
         url.searchParams.set('file', selectedFile);
         url.searchParams.set('time', currentTime);
         
-        const shareUrl = url.toString();
-        
-        navigator.clipboard.writeText(shareUrl).then(() => {
+        navigator.clipboard.writeText(url.toString()).then(() => {
             setUrlCopied(true);
             setTimeout(() => setUrlCopied(false), 2000);
             addLog(`Link Copied: ${currentTime}`);
@@ -513,28 +343,17 @@ const App: React.FC = () => {
 
   const currentSnapshot = processedSnapshots[selectedIndex] || null;
 
-  const bias = (currentSnapshot?.decoded?.bias || 'NEUTRAL').toUpperCase();
-  const narrative = currentSnapshot?.decoded?.one_liner || "Initializing Protocol...";
-  const isLong = bias.includes('LONG');
-  const isShort = bias.includes('SHORT');
-  
-  const thinkingText = currentSnapshot?.decoded?.thinking || 
-  currentSnapshot?.decoded?.thinking || 
-  (typeof currentSnapshot?.output === 'string' && currentSnapshot.output.includes('<think>') 
-    ? currentSnapshot.output.split('<think>')[1].split('</think>')[0] 
-    : null);
-
-  const TabButton = ({ id, label, icon: Icon }: { id: string, label: string, icon: any }) => (
-    <button onClick={() => setActiveTab(id)}
-      className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-3 rounded-lg transition-all border min-w-[50px] ${
-        activeTab === id 
-          ? 'bg-surface text-content border-border shadow-xl transform scale-105 z-10' 
-          : 'bg-background/20 text-content-muted border-transparent hover:bg-background/40 hover:text-content'
-      }`}>
-      <Icon className="w-3.5 h-3.5" />
-      <span className="text-[8px] font-black uppercase tracking-wider">{label}</span>
-    </button>
-  );
+  // Simple Global Chat Context
+  const globalContext = useMemo(() => {
+    if (!currentSnapshot || processedSnapshots.length === 0) return '';
+    return `
+      SYSTEM CONTEXT:
+      ROCKIT GLOBAL ASSISTANT
+      Time: ${currentSnapshot.input.current_et_time}
+      
+      Focus on session history and psychology.
+    `;
+  }, [currentSnapshot, processedSnapshots]);
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
@@ -542,233 +361,45 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-background text-content overflow-hidden font-sans select-none antialiased relative transition-colors duration-500">
-      {/* Header */}
-      <header className="shrink-0 bg-surface/95 border-b border-border px-4 py-2 flex items-center justify-between shadow-2xl backdrop-blur-xl z-[100] h-20">
-        
-        {/* Left: Brand & Controls */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="p-2 bg-accent rounded-xl shadow-[0_0_20px_var(--accent-glow)] border border-white/10">
-            <LayoutDashboard className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex flex-col">
-            <h1 className="text-base font-black tracking-tighter text-content uppercase italic leading-none">ROCKIT <span className="text-accent not-italic">ENGINE</span></h1>
-            <div className="flex items-center gap-2 mt-1">
-                 <button 
-                  onClick={() => setIsPaused(!isPaused)}
-                  className={`flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
-                    isPaused ? 'text-amber-400' : 'text-content-muted hover:text-accent'
-                  }`}
-                  title={isPaused ? "Resume Auto-Refresh" : "Pause Auto-Refresh"}
-                >
-                  {isPaused ? <Pause className="w-2.5 h-2.5" /> : <Timer className="w-2.5 h-2.5" />}
-                  {isPaused ? 'PAUSED' : `${countdown}S`}
-                </button>
-                <div className="w-0.5 h-0.5 rounded-full bg-border"></div>
-                <button 
-                  onClick={() => { fetchFileList(true); setCountdown(REFRESH_INTERVAL_SEC); }}
-                  className="group flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-content-muted hover:text-content transition-colors"
-                  title="Refresh Now"
-                >
-                  <RefreshCw className="w-2.5 h-2.5 group-hover:rotate-180 transition-transform" />
-                </button>
-            </div>
-          </div>
-        </div>
+      
+      <ChatPanel 
+        isOpen={isGlobalChatOpen} 
+        onClose={() => setIsGlobalChatOpen(false)} 
+        title="Global Session Assistant" 
+        contextData={globalContext} 
+        initialReport="I'm connected to the session stream. How can I help?" 
+      />
 
-        {/* Center: Intelligence Protocol Banner */}
-        {currentSnapshot ? (
-           <div className={`flex-1 mx-6 h-full rounded-2xl border flex items-center justify-between px-4 gap-4 overflow-hidden transition-all duration-700 shadow-inner ${
-             isLong ? 'bg-emerald-500/5 border-emerald-500/20' : 
-             isShort ? 'bg-rose-500/5 border-rose-500/20' : 
-             'bg-accent/5 border-accent/20'
-           }`}>
-             
-             {/* Narrative */}
-             <div className="flex items-center gap-3 overflow-hidden min-w-0 flex-1">
-                <div className={`p-2 rounded-xl shrink-0 ${
-                   isLong ? 'bg-emerald-500/20 text-emerald-400' : 
-                   isShort ? 'bg-rose-500/20 text-rose-400' : 
-                   'bg-accent/20 text-accent'
-                }`}>
-                   {isLong ? <ArrowUpRight className="w-4 h-4" /> : isShort ? <ArrowDownRight className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
-                </div>
-                <div className="min-w-0">
-                   <span className={`text-[8px] font-black uppercase tracking-[0.2em] block mb-0.5 ${isLong ? 'text-emerald-500/70' : isShort ? 'text-rose-500/70' : 'text-accent'}`}>
-                     Intelligence Protocol
-                   </span>
-                   <h3 className="text-xs font-bold text-content italic tracking-tight truncate max-w-lg xl:max-w-2xl" title={narrative}>
-                     "{narrative}"
-                   </h3>
-                </div>
-             </div>
-
-             {/* Navigation Tabs */}
-             <div className="flex items-center gap-1 shrink-0">
-                <TabButton id="brief" label="Brief" icon={Info} />
-                <TabButton id="logic" label="Logic" icon={Cpu} />
-                <TabButton id="intraday" label="Intraday" icon={Timer} />
-                <TabButton id="dpoc" label="DPOC" icon={Waypoints} />
-                <TabButton id="globex" label="Globex" icon={Globe} />
-                <TabButton id="profile" label="Profile" icon={BarChartHorizontal} />
-                <TabButton id="tpo" label="TPO" icon={Grid3X3} />
-                {thinkingText && <TabButton id="thinking" label="Think" icon={Brain} />}
-                <div className="w-px h-6 bg-border mx-1"></div>
-                <TabButton id="coach" label="Coach" icon={GraduationCap} />
-                <TabButton id="htf-coach" label="HTF Coach" icon={Map} />
-                <TabButton id="rk-audit" label="RK Audit" icon={Rocket} />
-                <TabButton id="trade-idea" label="Trade Idea" icon={Lightbulb} />
-                <TabButton id="json" label="JSON" icon={FileJson} />
-             </div>
-
-             {/* Metrics */}
-             <div className="flex items-center gap-3 shrink-0 pl-3 border-l border-border">
-                <div className="text-right">
-                    <span className="text-[8px] font-bold text-content-muted uppercase tracking-widest block">Trust</span>
-                    <div className="flex items-center justify-end gap-1 text-content font-mono font-black">
-                       <Target className="w-3 h-3 text-accent" />
-                       {currentSnapshot?.decoded?.confidence || '0%'}
-                    </div>
-                </div>
-                <div className={`px-3 py-1.5 rounded-lg border font-black text-xs tracking-wider ${
-                    isLong ? 'bg-emerald-500 text-emerald-950 border-emerald-400' : 
-                    isShort ? 'bg-rose-500 text-rose-950 border-rose-400' : 
-                    'bg-accent text-white border-accent'
-                }`}>
-                  {bias}
-                </div>
-             </div>
-           </div>
-        ) : <div className="flex-1" />}
-
-        {/* Right: Clock & User */}
-        <div className="flex items-center gap-4 shrink-0">
-           {errorMsg && (
-               <div className="hidden xl:flex items-center gap-1.5 px-2 py-1 bg-rose-500/10 border border-rose-500/20 rounded-lg text-[9px] text-rose-400 font-black uppercase animate-pulse">
-                 <AlertCircle className="w-3 h-3" /> {errorMsg}
-               </div>
-           )}
-           
-           <div className="flex items-center gap-2">
-               {/* Share Button */}
-               <button 
-                  onClick={handleShareUrl} 
-                  className={`p-2 rounded-full border transition-all ${
-                      urlCopied 
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' 
-                        : 'bg-surface border-border text-content-muted hover:text-accent hover:border-accent'
-                  }`} 
-                  title="Share Snapshot URL"
-               >
-                  {urlCopied ? <Check className="w-4 h-4" /> : <Link className="w-4 h-4" />}
-               </button>
-
-               {/* THEME TOGGLE */}
-               <button onClick={cycleTheme} className="p-2 rounded-full bg-surface border border-border text-content-muted hover:text-accent transition-colors" title={`Theme: ${theme.toUpperCase()}`}>
-                  <Palette className="w-4 h-4" />
-               </button>
-
-               {currentSnapshot && (
-                 <div className="flex items-center gap-2 bg-surface px-3 py-1.5 rounded-xl border border-border shadow-inner">
-                   <Clock className="w-4 h-4 text-accent" />
-                   <span className="text-sm font-mono font-black text-content tracking-tighter">{currentSnapshot.input.current_et_time}</span>
-                 </div>
-               )}
-
-               <div className="group relative flex items-center">
-                 <button onClick={handleLogout} className="flex items-center gap-2 pl-2 pr-1 py-1 rounded-full bg-surface hover:bg-panel border border-border transition-all hover:pr-3">
-                   <div className="w-7 h-7 rounded-full bg-panel flex items-center justify-center border border-border">
-                      <User className="w-4 h-4 text-content-muted" />
-                   </div>
-                   <div className="w-0 overflow-hidden group-hover:w-auto transition-all duration-300 whitespace-nowrap">
-                     <span className="text-[10px] font-bold text-content-muted uppercase mr-1">Logout</span>
-                   </div>
-                   <div className="p-1 bg-background rounded-full group-hover:bg-rose-500/20 group-hover:text-rose-400 transition-colors">
-                      <LogOut className="w-3 h-3 text-content-muted group-hover:text-rose-400" />
-                   </div>
-                 </button>
-               </div>
-           </div>
-        </div>
-      </header>
+      <AppHeader 
+        currentSnapshot={currentSnapshot}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        isPaused={isPaused}
+        setIsPaused={setIsPaused}
+        countdown={countdown}
+        handleRefresh={() => { fetchFileList(true); setCountdown(REFRESH_INTERVAL_SEC); }}
+        isGlobalChatOpen={isGlobalChatOpen}
+        setIsGlobalChatOpen={setIsGlobalChatOpen}
+        urlCopied={urlCopied}
+        handleShareUrl={handleShareUrl}
+        theme={theme}
+        cycleTheme={cycleTheme}
+        handleLogout={handleLogout}
+        errorMsg={errorMsg}
+      />
 
       <main className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-72 border-r border-border bg-surface/50 flex flex-col shrink-0 transition-colors duration-500">
-          <div className="p-5 border-b border-border">
-             <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Cloud className="w-4 h-4 text-accent" />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-content-muted">Bucket</span>
-                </div>
-                <button onClick={() => fetchFileList()} className="p-1.5 hover:bg-panel rounded-lg transition-all group">
-                  <RefreshCw className={`w-4 h-4 text-content-muted group-hover:text-accent ${isListLoading ? 'animate-spin' : ''}`} />
-                </button>
-             </div>
-             
-             <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
-                {availableFiles.length === 0 && !isListLoading ? (
-                  <div className="text-[10px] text-content-muted font-mono text-center py-4 italic">No Files Found</div>
-                ) : (
-                  availableFiles.map(f => (
-                    <button key={f} onClick={() => handleFileSelect(f)}
-                      className={`w-full text-left px-3 py-2.5 rounded-xl text-[10px] font-mono transition-all border ${
-                        selectedFile === f ? 'bg-accent/20 text-accent border-accent/40 shadow-lg' : 'text-content-muted border-transparent hover:bg-panel'
-                      }`}>
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-3 h-3 opacity-50" />
-                        {f}
-                      </div>
-                    </button>
-                  ))
-                )}
-             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5 custom-scrollbar mb-8">
-            <div className="flex items-center gap-2 mb-4 px-1">
-              <Cpu className="w-3.5 h-3.5 text-content-muted" />
-              <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-content-muted">Session Sequence</h3>
-            </div>
-            <div className="space-y-2.5">
-              {processedSnapshots.map((s, idx) => {
-                const active = idx === selectedIndex;
-                const bias = (s.decoded?.bias || 'NEUTRAL').toUpperCase();
-                const confidence = s.decoded?.confidence || '0%';
-                const confVal = parseInt(confidence.replace(/\D/g, '')) || 0;
-                const isHighConf = confVal > 80;
-                const [hh, mm] = (s.input.current_et_time || "00:00").split(':').map(Number);
-                const isQuarterSession = !isNaN(hh) && !isNaN(mm) && 
-                                         (hh > 9 || (hh === 9 && mm >= 30)) && 
-                                         (mm % 15 === 0);
-
-                return (
-                  <button key={idx} onClick={() => { setSelectedIndex(idx); autoScrollEnabled.current = (idx === processedSnapshots.length-1); }}
-                    className={`w-full text-left p-4 rounded-2xl transition-all border group relative overflow-hidden ${
-                      active 
-                        ? 'bg-accent text-white border-accent shadow-xl scale-[1.02]' 
-                        : isQuarterSession
-                          ? 'bg-yellow-500/10 border-yellow-500/30 hover:border-yellow-500/50'
-                          : 'bg-surface border-border hover:border-content-muted'
-                    }`}>
-                    <div className="flex items-center justify-between relative z-10">
-                      <div className="flex flex-col gap-0.5">
-                        <span className={`text-[11px] font-black font-mono ${active ? 'text-white' : isQuarterSession ? 'text-yellow-600' : 'text-content-muted'}`}>{s.input.current_et_time}</span>
-                        <span className={`text-[9px] font-bold ${isHighConf ? 'animate-pulse text-emerald-500' : 'text-content-muted'}`}>
-                           {confidence}
-                        </span>
-                      </div>
-                      <span className={`text-[9px] px-2 py-0.5 rounded-lg font-black uppercase tracking-tighter ${
-                        active ? 'bg-white/20' : bias.includes('LONG') ? 'text-emerald-500 bg-emerald-500/10 border border-emerald-500/20' : bias.includes('SHORT') ? 'text-rose-500 bg-rose-500/10 border border-rose-500/20' : 'text-content-muted bg-panel'
-                      }`}>
-                        {bias}
-                      </span>
-                    </div>
-                  </button>
-                );
-              }).reverse()}
-            </div>
-          </div>
-        </aside>
+        <Sidebar 
+            availableFiles={availableFiles}
+            selectedFile={selectedFile}
+            isListLoading={isListLoading}
+            fetchFileList={() => fetchFileList(false)}
+            handleFileSelect={(f) => handleFileSelect(f)}
+            processedSnapshots={processedSnapshots}
+            selectedIndex={selectedIndex}
+            setSelectedIndex={setSelectedIndex}
+            setAutoScroll={(enabled) => { autoScrollEnabled.current = enabled; }}
+        />
 
         <section className="flex-1 bg-background p-6 overflow-hidden relative shadow-inner flex flex-col mb-8 transition-colors duration-500">
           {currentSnapshot ? (
@@ -777,6 +408,8 @@ const App: React.FC = () => {
               output={currentSnapshot.decoded || null} 
               allSnapshots={processedSnapshots} 
               activeTab={activeTab}
+              isGlobalChatOpen={isGlobalChatOpen} 
+              htfData={htfData}
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-content-muted">

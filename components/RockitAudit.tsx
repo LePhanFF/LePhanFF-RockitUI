@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MarketSnapshot } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -13,19 +13,38 @@ import {
   CheckCircle2,
   Terminal,
   Copy,
-  ClipboardCheck
+  ClipboardCheck,
+  Ban,
+  MessageSquare
 } from 'lucide-react';
+import ChatPanel from './ChatPanel';
 
 interface RockitAuditProps {
   snapshots: MarketSnapshot[];
+  isGlobalChatOpen?: boolean;
 }
 
-const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots }) => {
+const PSYCH_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-psychology.md";
+
+const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string>('');
   const [copied, setCopied] = useState(false);
+  const [psychContent, setPsychContent] = useState<string>('');
+
+  // Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [lastContext, setLastContext] = useState<string>('');
+
+  // Fetch Psychology Protocol
+  useEffect(() => {
+    fetch(`${PSYCH_URL}?cb=${Date.now()}`)
+      .then(r => r.text())
+      .then(t => setPsychContent(t))
+      .catch(e => console.warn("RockitAudit: Psychology fetch failed", e));
+  }, []);
 
   const generateRockitAnalysis = async () => {
     if (!snapshots || snapshots.length === 0) {
@@ -37,6 +56,7 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots }) => {
     setError(null);
     setReport('');
     setCopied(false);
+    setIsChatOpen(false); // Reset chat
     setStatus('Initializing ROCKIT Protocol...');
 
     try {
@@ -80,7 +100,7 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots }) => {
       setStatus('Connecting to Neural Engine...');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // 4. Construct Prompt
+      // 4. Construct Prompt (Psychology at END)
       const prompt = `
         You are a Senior Trading Analyst utilizing the ROCKIT Market Profile Framework.
         
@@ -96,6 +116,10 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots }) => {
         ${JSON.stringify(contextData)}
 
         -----------------------------------------
+        PSYCHOLOGY PROTOCOL (TRADER SUPPORT):
+        ${psychContent || "No Psychology Protocol Loaded."}
+        -----------------------------------------
+
         OUTPUT REQUIREMENTS:
         Generate a Markdown report with the following specific sections:
 
@@ -113,6 +137,8 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots }) => {
         - **Key Level:** One price level to watch for the next session based on today's close.
         - **Bias:** Bullish/Bearish/Neutral going forward.
       `;
+
+      setLastContext(prompt);
 
       // 5. Call API
       setStatus('Synthesizing Analysis...');
@@ -197,16 +223,43 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots }) => {
             </div>
         </div>
 
-        {!loading && (
-             <button 
-                onClick={generateRockitAnalysis}
-                className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] group"
-            >
-                <FileJson className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                <span>Run Logic</span>
-            </button>
-        )}
+        <div className="flex items-center gap-2">
+            {!loading && report && (
+                <button 
+                    onClick={() => !isGlobalChatOpen && setIsChatOpen(!isChatOpen)}
+                    disabled={isGlobalChatOpen}
+                    className={`flex items-center gap-2 px-4 py-2 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg ${
+                        isGlobalChatOpen 
+                            ? 'bg-slate-800 cursor-not-allowed opacity-50' 
+                            : 'bg-emerald-600 hover:bg-emerald-500'
+                    }`}
+                    title={isGlobalChatOpen ? "Disabled: Global Chat Active" : "Open Local Chat"}
+                >
+                    {isGlobalChatOpen ? <Ban className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
+                    <span>Chat</span>
+                </button>
+            )}
+            
+            {!loading && (
+                <button 
+                    onClick={generateRockitAnalysis}
+                    className="flex items-center gap-2 px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)] group"
+                >
+                    <FileJson className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    <span>Run Logic</span>
+                </button>
+            )}
+        </div>
       </div>
+
+      {/* CHAT PANEL */}
+      <ChatPanel 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        title="ROCKIT Audit"
+        contextData={lastContext}
+        initialReport={report}
+      />
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-slate-950/50 relative z-10">
