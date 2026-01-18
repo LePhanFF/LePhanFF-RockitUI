@@ -27,7 +27,14 @@ import {
   MousePointerClick,
   Ban,
   Flag,
-  MessageSquare
+  MessageSquare,
+  History,
+  FlaskConical,
+  XCircle,
+  CheckCircle,
+  Clock,
+  ArrowRightLeft,
+  Footprints
 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
 
@@ -158,6 +165,280 @@ const PlaybookCard = ({ item, onClick }: { item: any, onClick: () => void }) => 
   );
 };
 
+// --- BACKTEST LOGIC ---
+const extractLevels = (text: string) => {
+    const extract = (str: string, pattern: RegExp) => {
+        const match = str.match(pattern);
+        if (match && match[1]) {
+            const raw = match[1].replace(/,/g, '');
+            return parseFloat(raw);
+        }
+        return null;
+    };
+
+    // Parse specific blocks to avoid finding the first match in the whole document
+    const parseBlock = (block: string) => ({
+        entry: extract(block, /Entry Zone:\*\*.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Entry Zone:\*\*.*?([\d,.]+)/i),
+        stop: extract(block, /Risk Exit.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Risk Exit.*?:.*?([\d,.]+)/i) || extract(block, /Stop.*?:.*?([\d,.]+)/i),
+        tp1: extract(block, /Target 1.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Target 1.*?:.*?([\d,.]+)/i),
+        tp2: extract(block, /Target 2.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Target 2.*?:.*?([\d,.]+)/i)
+    });
+
+    let primary = null;
+    let hedge = null;
+
+    if (text.includes('🥇 PRIMARY SETUP')) {
+        const block = text.split('🥇 PRIMARY SETUP')[1].split('##')[0];
+        const data = parseBlock(block);
+        if (data.entry && (data.stop || data.tp1)) primary = data;
+    }
+
+    if (text.includes('🥈 HEDGE SETUP')) {
+        const block = text.split('🥈 HEDGE SETUP')[1].split('##')[0];
+        const data = parseBlock(block);
+        if (data.entry && (data.stop || data.tp1)) hedge = data;
+    }
+
+    // Fallback if parsing fails on specific sections
+    if (!primary) {
+        const data = parseBlock(text);
+        if (data.entry && data.stop) primary = data;
+    }
+
+    return { primary, hedge };
+};
+
+interface SimResult {
+    result: string;
+    entryTime: string;
+    exitTime: string;
+    exitPrice: number;
+    maxFavorable: number;
+    realizedPnL: number;
+    realizedRR: number;
+    status: string;
+    beTriggered?: boolean;
+}
+
+const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
+    if (!setup || !futureSnapshots.length) return null;
+    
+    const { entry, stop, tp1 } = setup;
+    if (!entry || !stop || !tp1) return null;
+
+    const isLong = tp1 > entry;
+    const initialRisk = Math.abs(entry - stop);
+    const safeRisk = initialRisk < 0.25 ? 1 : initialRisk;
+
+    // --- STRATEGY STATES ---
+    
+    // 1. FIXED (Standard)
+    let fixed = {
+        status: 'PENDING',
+        result: 'NEUTRAL',
+        exitPrice: 0,
+        exitTime: '',
+        entryTime: '',
+        maxFavorable: 0,
+        realizedPnL: 0,
+        realizedRR: 0
+    };
+
+    // 2. SMART BE (Move to Entry after 5m + displacement)
+    let smart = {
+        status: 'PENDING',
+        result: 'NEUTRAL',
+        exitPrice: 0,
+        exitTime: '',
+        entryTime: '',
+        maxFavorable: 0,
+        realizedPnL: 0,
+        realizedRR: 0,
+        stopPrice: stop,
+        beTriggered: false
+    };
+
+    // 3. TRAIL 5M (Trail stop behind 5m candles)
+    let trail = {
+        status: 'PENDING',
+        result: 'NEUTRAL',
+        exitPrice: 0,
+        exitTime: '',
+        entryTime: '',
+        maxFavorable: 0,
+        realizedPnL: 0,
+        realizedRR: 0,
+        stopPrice: stop,
+        // Trailing Helpers
+        current5mHigh: -Infinity,
+        current5mLow: Infinity,
+        last5mPeriod: ''
+    };
+
+    // Helper to calculate PnL/RR/Result for a closed trade
+    const finalize = (state: any, exitP: number, time: string, reason: string) => {
+        state.status = 'CLOSED';
+        state.exitPrice = exitP;
+        state.exitTime = time;
+        state.result = reason;
+        const diff = state.exitPrice - entry;
+        state.realizedPnL = isLong ? diff : -diff;
+        state.realizedRR = state.realizedPnL / safeRisk;
+    };
+
+    for (const snap of futureSnapshots) {
+        const price = snap.input.intraday.ib.current_close; // Close as proxy
+        const time = snap.input.current_et_time;
+        const [hh, mm] = time.split(':').map(Number);
+        
+        // Determine 5m Period (e.g., 09:30, 09:35)
+        const periodIndex = Math.floor(mm / 5);
+        const current5mPeriod = `${hh}:${periodIndex}`;
+
+        // --- TRIGGER LOGIC (Shared) ---
+        // Assuming limit fill if price touches/passes entry
+        const entryTriggered = (fixed.status === 'PENDING') && (
+            (isLong && price <= entry * 1.0005 && price >= entry * 0.9995) || // Touch
+            (isLong && price < entry) || // Gap through
+            (!isLong && price >= entry * 0.9995 && price <= entry * 1.0005) ||
+            (!isLong && price > entry)
+        );
+
+        if (entryTriggered) {
+            // Activate all strategies
+            [fixed, smart, trail].forEach(s => {
+                if (s.status === 'PENDING') {
+                    s.status = 'OPEN';
+                    s.entryTime = time;
+                }
+            });
+        }
+
+        // --- UPDATE RUNNING STATS ---
+        if (fixed.status === 'OPEN') {
+            const diff = price - entry;
+            const curPnL = isLong ? diff : -diff;
+            fixed.maxFavorable = Math.max(fixed.maxFavorable, curPnL);
+            smart.maxFavorable = Math.max(smart.maxFavorable, curPnL);
+            trail.maxFavorable = Math.max(trail.maxFavorable, curPnL);
+        }
+
+        // --- STRATEGY 1: FIXED ---
+        if (fixed.status === 'OPEN') {
+            // Check Stop
+            if ((isLong && price <= stop) || (!isLong && price >= stop)) {
+                finalize(fixed, stop, time, 'LOSS');
+            }
+            // Check TP
+            else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
+                finalize(fixed, tp1, time, 'WIN (TP1)');
+            }
+        }
+
+        // --- STRATEGY 2: SMART BE ---
+        if (smart.status === 'OPEN') {
+            // Check Dynamic Stop
+            if ((isLong && price <= smart.stopPrice) || (!isLong && price >= smart.stopPrice)) {
+                const res = Math.abs(smart.stopPrice - entry) < 0.5 ? 'BE (SCRATCH)' : 'LOSS';
+                finalize(smart, smart.stopPrice, time, res);
+            }
+            // Check TP
+            else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
+                finalize(smart, tp1, time, 'WIN (TP1)');
+            }
+            // Update Logic: Move to BE if > 4pts profit (Displacement Simulation)
+            else if (!smart.beTriggered) {
+                const currentProfit = isLong ? price - entry : entry - price;
+                if (currentProfit > 4.0) { // 4 points ~ FVG displacement proxy
+                    smart.stopPrice = entry;
+                    smart.beTriggered = true;
+                }
+            }
+        }
+
+        // --- STRATEGY 3: TRAIL 5M ---
+        if (trail.status === 'OPEN') {
+            // Update current 5m candle stats
+            trail.current5mHigh = Math.max(trail.current5mHigh, price);
+            trail.current5mLow = Math.min(trail.current5mLow, price);
+
+            // Check Dynamic Stop
+            if ((isLong && price <= trail.stopPrice) || (!isLong && price >= trail.stopPrice)) {
+                const pnl = isLong ? trail.stopPrice - entry : entry - trail.stopPrice;
+                const label = pnl > 0 ? 'TRAIL WIN' : pnl > -0.5 && pnl < 0.5 ? 'TRAIL BE' : 'TRAIL LOSS';
+                finalize(trail, trail.stopPrice, time, label);
+            }
+            // Check TP (Trail strategy usually holds for runner, but let's respect TP1 for consistency/comparison)
+            else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
+                finalize(trail, tp1, time, 'WIN (TP1)');
+            }
+            
+            // Logic: Period Close Updates
+            // If the 5m period index changes, the previous candle closed.
+            if (trail.last5mPeriod && trail.last5mPeriod !== current5mPeriod) {
+                if (isLong) {
+                    // Move stop to Low of completed candle (if higher than current stop)
+                    if (trail.current5mLow > trail.stopPrice) {
+                        trail.stopPrice = trail.current5mLow;
+                    }
+                } else {
+                    // Move stop to High of completed candle (if lower than current stop)
+                    if (trail.current5mHigh < trail.stopPrice) {
+                        trail.stopPrice = trail.current5mHigh;
+                    }
+                }
+                // Reset for new candle
+                trail.current5mHigh = -Infinity;
+                trail.current5mLow = Infinity;
+            }
+            trail.last5mPeriod = current5mPeriod;
+        }
+
+        // Optimization: Break if all closed
+        if (fixed.status === 'CLOSED' && smart.status === 'CLOSED' && trail.status === 'CLOSED') {
+            break;
+        }
+    }
+
+    // Force Close at EOD if still open
+    const eodPrice = futureSnapshots[futureSnapshots.length - 1].input.intraday.ib.current_close;
+    const eodTime = futureSnapshots[futureSnapshots.length - 1].input.current_et_time;
+
+    [fixed, smart, trail].forEach(s => {
+        if (s.status === 'OPEN') {
+            const diff = eodPrice - entry;
+            const finalPnL = isLong ? diff : -diff;
+            finalize(s, eodPrice, eodTime, finalPnL > 0 ? 'OPEN (PROFIT)' : 'OPEN (DRAWDOWN)');
+        }
+    });
+
+    return { 
+        fixed: fixed as SimResult, 
+        smart: smart as SimResult, 
+        trail: trail as SimResult,
+        direction: isLong ? 'LONG' : 'SHORT',
+        entryPrice: entry
+    };
+};
+
+const StrategyComparisonRow = ({ label, data, icon: Icon }: any) => (
+    <div className="grid grid-cols-4 gap-2 items-center text-[10px] font-mono border-b border-slate-800/50 pb-2 last:border-0 last:pb-0">
+        <div className="col-span-1 flex items-center gap-1.5 text-slate-400 font-bold uppercase">
+            <Icon className="w-3 h-3 opacity-70" />
+            {label}
+        </div>
+        <div className={`col-span-1 font-black ${data.result.includes('WIN') || data.result.includes('PROFIT') ? 'text-emerald-400' : data.result.includes('BE') ? 'text-amber-400' : 'text-rose-400'}`}>
+            {data.result}
+        </div>
+        <div className="col-span-1 text-right text-slate-300">
+            {data.realizedPnL > 0 ? '+' : ''}{data.realizedPnL.toFixed(2)} pts
+        </div>
+        <div className="col-span-1 text-right font-black text-indigo-300">
+            {data.realizedRR.toFixed(2)}R
+        </div>
+    </div>
+);
+
 const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -175,6 +456,10 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
   const [showPlaybookLibrary, setShowPlaybookLibrary] = useState(false);
   const [libraryView, setLibraryView] = useState<'visual' | 'source'>('visual');
   const [selectedPlay, setSelectedPlay] = useState<any>(null);
+
+  // Backtest State
+  const [isBacktestMode, setIsBacktestMode] = useState(false);
+  const [backtestResults, setBacktestResults] = useState<any>(null);
 
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -235,6 +520,7 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
     setReport('');
     setCopied(false);
     setIsChatOpen(false); // Reset chat on new generation
+    setBacktestResults(null);
 
     try {
       const lastSnapshot = historyPointInTime[historyPointInTime.length - 1];
@@ -329,6 +615,8 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
       setLastContext(prompt);
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Stream response logic needs to accumulate text to then parse for backtest
+      let fullText = "";
       const responseStream = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
         contents: [
@@ -342,8 +630,21 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
       for await (const chunk of responseStream) {
         const text = chunk.text;
         if (text) {
+          fullText += text;
           setReport(prev => prev + text);
         }
+      }
+
+      // --- RUN BACKTEST IF ENABLED ---
+      if (isBacktestMode && fullText) {
+          const { primary, hedge } = extractLevels(fullText);
+          const currentTime = lastInput.current_et_time;
+          const futureSnapshots = snapshots.filter(s => s.input.current_et_time > currentTime).sort((a,b) => a.input.current_et_time.localeCompare(b.input.current_et_time));
+          
+          const primaryRes = primary ? runBacktest(primary, futureSnapshots) : null;
+          const hedgeRes = hedge ? runBacktest(hedge, futureSnapshots) : null;
+          
+          setBacktestResults({ primary: primaryRes, hedge: hedgeRes });
       }
 
     } catch (err: any) {
@@ -404,19 +705,19 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
 
       {/* Header */}
       <div className="p-6 border-b border-slate-800 bg-slate-900/60 shrink-0 flex items-center justify-between relative z-10">
-        <div className="flex items-center gap-4">
-            <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+        <div className="flex items-center gap-4 min-w-0">
+            <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)] shrink-0">
                 <Lightbulb className="w-8 h-8 text-amber-400" />
             </div>
-            <div>
-                <h2 className="text-base font-black uppercase tracking-widest text-slate-200">Trade Idea Generator</h2>
-                <div className="flex items-center gap-2 mt-1">
-                     <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-400">
+            <div className="min-w-0 overflow-hidden">
+                <h2 className="text-base font-black uppercase tracking-widest text-slate-200 truncate">Trade Idea Generator</h2>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                     <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-400 whitespace-nowrap">
                         TIME: {currentSnapshot?.input?.current_et_time}
                      </span>
-                     {playbookStatus === 'loading' && <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-500 font-bold animate-pulse"><Loader2 className="w-3 h-3 animate-spin" /> Linking Playbook...</span>}
-                     {playbookStatus === 'active' && <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-400 font-bold"><Link2 className="w-3 h-3" /> Playbook Linked</span>}
-                     {playbookStatus === 'error' && <span title={`Failed to fetch: ${PLAYBOOK_URL}`} className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] font-mono text-rose-400 font-bold cursor-help"><Unlink className="w-3 h-3" /> Playbook Unlinked</span>}
+                     {playbookStatus === 'loading' && <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-500 font-bold animate-pulse whitespace-nowrap"><Loader2 className="w-3 h-3 animate-spin" /> Linking Playbook...</span>}
+                     {playbookStatus === 'active' && <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-400 font-bold whitespace-nowrap"><Link2 className="w-3 h-3" /> Playbook Linked</span>}
+                     {playbookStatus === 'error' && <span title={`Failed to fetch: ${PLAYBOOK_URL}`} className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] font-mono text-rose-400 font-bold cursor-help whitespace-nowrap"><Unlink className="w-3 h-3" /> Playbook Unlinked</span>}
                      
                      <button onClick={() => setShowPlaybookLibrary(true)} className="ml-2 p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-indigo-500/30" title="Open Playbook Library">
                          <BookOpen className="w-3.5 h-3.5" />
@@ -424,26 +725,47 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
                 </div>
             </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 shrink-0 ml-4">
+            {/* Backtest Toggle */}
+            {!loading && (
+                <button 
+                    onClick={() => setIsBacktestMode(!isBacktestMode)} 
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
+                        isBacktestMode 
+                            ? 'bg-purple-500/20 border-purple-500/50 text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.3)]' 
+                            : 'bg-slate-950/50 border-slate-800 text-slate-500 hover:text-slate-300 hover:bg-slate-900'
+                    }`}
+                    title="Run forward simulation on generated plan"
+                >
+                    <FlaskConical className="w-4 h-4" />
+                    <span className="text-[10px] font-black uppercase tracking-widest hidden xl:inline">Backtest</span>
+                </button>
+            )}
+
+            {/* Chat Button */}
             {!loading && report && (
                 <button 
                     onClick={() => !isGlobalChatOpen && setIsChatOpen(!isChatOpen)}
                     disabled={isGlobalChatOpen}
-                    className={`flex items-center gap-2 px-4 py-3 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg ${
-                        isGlobalChatOpen 
-                            ? 'bg-slate-800 cursor-not-allowed opacity-50' 
-                            : 'bg-indigo-600 hover:bg-indigo-500'
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
+                        isChatOpen 
+                            ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg' 
+                            : isGlobalChatOpen
+                                ? 'opacity-50 cursor-not-allowed border-transparent text-slate-600 bg-slate-950/30'
+                                : 'bg-slate-950/50 border-slate-800 text-slate-500 hover:text-white hover:bg-slate-900'
                     }`}
                     title={isGlobalChatOpen ? "Disabled: Global Chat Active" : "Open Local Chat"}
                 >
                     {isGlobalChatOpen ? <Ban className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
-                    <span>Chat</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest hidden xl:inline">Chat</span>
                 </button>
             )}
+
+            {/* Main Action */}
             {!loading && (
-                <button onClick={generateTradeIdeas} className="flex items-center gap-2 px-8 py-3 bg-amber-600 hover:bg-amber-500 text-white text-sm font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.5)] group transform hover:-translate-y-0.5">
+                <button onClick={generateTradeIdeas} className="flex items-center gap-2 px-5 py-3 bg-amber-600 hover:bg-amber-500 text-white text-sm font-black uppercase tracking-widest rounded-xl transition-all shadow-[0_0_20px_rgba(245,158,11,0.3)] hover:shadow-[0_0_30px_rgba(245,158,11,0.5)] group transform hover:-translate-y-0.5 whitespace-nowrap ml-2">
                     <Lightbulb className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    <span>Generate Plan</span>
+                    <span className="hidden sm:inline">Generate Plan</span>
                 </button>
             )}
         </div>
@@ -602,6 +924,100 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
                     </button>
                 </div>
                 <div className="prose prose-invert prose-headings:font-black prose-p:text-slate-300 max-w-none">{renderMarkdown(report)}</div>
+                
+                {/* BACKTEST RESULTS SECTION */}
+                {backtestResults && (
+                    <div className="mt-12 bg-slate-900/80 border border-purple-500/30 rounded-3xl p-6 shadow-[0_0_30px_rgba(168,85,247,0.1)] relative overflow-hidden animate-in slide-in-from-bottom-10 duration-700">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 via-fuchsia-500 to-indigo-500"></div>
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                                <FlaskConical className="w-5 h-5 text-purple-400" />
+                            </div>
+                            <h3 className="text-lg font-black uppercase tracking-widest text-purple-200">Simulation Report</h3>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Primary Result */}
+                            {backtestResults.primary ? (
+                                <div className="bg-slate-950/50 rounded-2xl p-5 border border-slate-800 relative group hover:border-purple-500/30 transition-colors">
+                                    <div className="flex justify-between items-start mb-4">
+                                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest group-hover:text-purple-400 transition-colors">Primary Setup</span>
+                                         <div className={`flex items-center gap-2 text-xs font-bold ${backtestResults.primary.direction === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                             <span>{backtestResults.primary.direction}</span>
+                                             <span className="text-slate-500 text-[10px] font-mono">@ {backtestResults.primary.entryPrice.toFixed(2)}</span>
+                                         </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <div className="bg-slate-900 p-2 rounded-xl">
+                                            {backtestResults.primary.fixed.result.includes('WIN') ? (
+                                                <CheckCircle className="w-6 h-6 text-emerald-400" />
+                                            ) : backtestResults.primary.fixed.result.includes('LOSS') ? (
+                                                <XCircle className="w-6 h-6 text-rose-400" />
+                                            ) : (
+                                                <History className="w-6 h-6 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-black text-white">{backtestResults.primary.fixed.entryTime || 'N/A'}</div>
+                                            <div className="text-[10px] font-mono text-slate-500">Entry Trigger Time</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 mb-2">
+                                        <StrategyComparisonRow label="Fixed" data={backtestResults.primary.fixed} icon={Shield} />
+                                        <StrategyComparisonRow label="Smart BE" data={backtestResults.primary.smart} icon={ArrowRightLeft} />
+                                        <StrategyComparisonRow label="Trail 5m" data={backtestResults.primary.trail} icon={Footprints} />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-slate-950/30 rounded-2xl p-5 border border-slate-800 border-dashed flex items-center justify-center text-slate-600 text-xs font-mono">
+                                    No actionable Primary Setup detected.
+                                </div>
+                            )}
+
+                            {/* Hedge Result */}
+                            {backtestResults.hedge ? (
+                                <div className="bg-slate-950/50 rounded-2xl p-5 border border-slate-800 relative group hover:border-purple-500/30 transition-colors">
+                                    <div className="flex justify-between items-start mb-4">
+                                         <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest group-hover:text-purple-400 transition-colors">Hedge Setup</span>
+                                         <div className={`flex items-center gap-2 text-xs font-bold ${backtestResults.hedge.direction === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                             <span>{backtestResults.hedge.direction}</span>
+                                             <span className="text-slate-500 text-[10px] font-mono">@ {backtestResults.hedge.entryPrice.toFixed(2)}</span>
+                                         </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-4 mb-4">
+                                        <div className="bg-slate-900 p-2 rounded-xl">
+                                            {backtestResults.hedge.fixed.result.includes('WIN') ? (
+                                                <CheckCircle className="w-6 h-6 text-emerald-400" />
+                                            ) : backtestResults.hedge.fixed.result.includes('LOSS') ? (
+                                                <XCircle className="w-6 h-6 text-rose-400" />
+                                            ) : (
+                                                <History className="w-6 h-6 text-slate-400" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-black text-white">{backtestResults.hedge.fixed.entryTime || 'N/A'}</div>
+                                            <div className="text-[10px] font-mono text-slate-500">Entry Trigger Time</div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2 mb-2">
+                                        <StrategyComparisonRow label="Fixed" data={backtestResults.hedge.fixed} icon={Shield} />
+                                        <StrategyComparisonRow label="Smart BE" data={backtestResults.hedge.smart} icon={ArrowRightLeft} />
+                                        <StrategyComparisonRow label="Trail 5m" data={backtestResults.hedge.trail} icon={Footprints} />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-slate-950/30 rounded-2xl p-5 border border-slate-800 border-dashed flex items-center justify-center text-slate-600 text-xs font-mono">
+                                    No actionable Hedge Setup detected.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 <div className="mt-16 pt-10 border-t border-slate-800/50 flex items-center justify-center opacity-30"><Quote className="w-8 h-8 text-slate-500" /></div>
             </div>
         )}
