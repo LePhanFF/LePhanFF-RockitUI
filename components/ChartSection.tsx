@@ -27,9 +27,9 @@ const ToggleButton = ({ active, onClick, icon: Icon, label, activeClass }: any) 
 const ChartSection: React.FC<ChartSectionProps> = ({ snapshot, allSnapshots }) => {
   const [showVWAP, setShowVWAP] = useState(true);
   const [showIB, setShowIB] = useState(true);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfile] = useState(true);
   const [showFVG, setShowFVG] = useState(true);
-  const [showGlobex, setShowGlobex] = useState(false);
+  const [showGlobex, setShowGlobex] = useState(true);
   const [showEMAs, setShowEMAs] = useState(false);
   const [showDPOC, setShowDPOC] = useState(true);
   const [showComposite, setShowComposite] = useState(false); 
@@ -137,7 +137,7 @@ const ChartSection: React.FC<ChartSectionProps> = ({ snapshot, allSnapshots }) =
       ctx.fillRect(0, 0, width, height);
 
       // 2. Find SVGs
-      const svgs = Array.from(chartContainerRef.current.querySelectorAll('svg'));
+      const svgs = Array.from(chartContainerRef.current.querySelectorAll('svg')) as SVGSVGElement[];
       
       // Identify Chart SVG vs Drawing SVG
       // Recharts SVG usually has 'recharts-surface' class

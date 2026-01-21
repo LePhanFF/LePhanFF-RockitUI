@@ -34,7 +34,9 @@ import {
   CheckCircle,
   Clock,
   ArrowRightLeft,
-  Footprints
+  Footprints,
+  Info,
+  Maximize2
 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
 
@@ -67,17 +69,20 @@ const AnimStyles = () => (
       0%, 100% { transform: scale(1); opacity: 0.8; }
       50% { transform: scale(1.1); opacity: 1; }
     }
-    .path-draw { stroke-dasharray: 1000; animation: drawLine 8s ease-out forwards; }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    .path-draw { stroke-dasharray: 1000; animation: drawLine 12s ease-out forwards; }
+    .path-draw-fast { stroke-dasharray: 1000; animation: drawLine 8s ease-out forwards; }
     .marker-entry { animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; transform-origin: center; }
     .marker-stop { animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; transform-origin: center; }
     .marker-target { animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; transform-origin: center; }
-    .delay-0 { animation-delay: 0s; }
-    .delay-1 { animation-delay: 1.5s; }
-    .delay-2 { animation-delay: 3s; }
-    .delay-3 { animation-delay: 4.5s; }
-    .delay-3b { animation-delay: 6s; }
-    .delay-4 { animation-delay: 7s; }
-    .delay-5 { animation-delay: 8s; }
+    .delay-1 { animation-delay: 2s; }
+    .delay-2 { animation-delay: 4s; }
+    .delay-3 { animation-delay: 6s; }
+    .delay-4 { animation-delay: 8s; }
+    .delay-5 { animation-delay: 10s; }
   `}</style>
 );
 
@@ -101,40 +106,283 @@ const CommonDefs = () => (
   </defs>
 );
 
-// --- PLAYBOOK VISUALS ---
-const PlayVisual_Trend = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 160 L 40 140 L 40 120 L 30 100 L 30 80 L 40 60 L 40 40 L 60 20 L 60 0 L 0 0 Z" fill="url(#volGradient)" /><line x1="0" y1="90" x2="300" y2="90" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" /><text x="295" y="85" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB HIGH</text><path d="M0 140 Q 100 120, 160 95 T 300 25" fill="none" stroke="#8b5cf6" strokeWidth="2" opacity="0.5" strokeDasharray="2 2" /><text x="20" y="130" fill="#8b5cf6" fontSize="8" opacity="0.6" fontStyle="italic">20 EMA</text><path d="M20 130 L 80 80 L 120 95 L 200 40 L 230 50 L 290 10" fill="none" stroke="#64748b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.1" /><path d="M20 130 L 80 80 L 120 95 L 200 40 L 230 50 L 290 10" fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-3" style={{ transformBox: 'fill-box' }}><circle cx="120" cy="95" r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" filter="url(#glow-entry)" /><text x="120" y="115" fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">ENTRY 1</text></g><g className="marker-entry delay-3b" style={{ transformBox: 'fill-box' }}><circle cx="230" cy="50" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" opacity="0.8" /><text x="230" y="68" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">ADD</text></g><g className="marker-stop delay-4" style={{ transformBox: 'fill-box' }}><line x1="100" y1="110" x2="140" y2="110" stroke="#f43f5e" strokeWidth="2" strokeDasharray="2 2" /><text x="145" y="112" fill="#f43f5e" fontSize="8" fontWeight="bold" textAnchor="start">STOP</text></g><g className="marker-target delay-5" style={{ transformBox: 'fill-box' }}><circle cx="290" cy="10" r="8" fill="none" stroke="#10b981" strokeWidth="2" className="animate-[pulseTarget_2s_infinite]" /><text x="280" y="25" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">TP</text></g></svg>);
-const PlayVisual_Balance = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 140 Q 80 80, 0 20 Z" fill="url(#volGradient)" /><line x1="0" y1="80" x2="60" y2="80" stroke="#6366f1" strokeWidth="1" opacity="0.4" /><text x="65" y="82" fill="#6366f1" fontSize="8" opacity="0.5">VPOC</text><line x1="0" y1="30" x2="300" y2="30" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" /><text x="295" y="25" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB HIGH</text><line x1="0" y1="130" x2="300" y2="130" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" /><text x="295" y="145" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB LOW</text><path d="M50 80 L 100 130 L 115 125 L 180 30 L 200 35 L 250 80" fill="none" stroke="#64748b" strokeWidth="3" opacity="0.1" /><path d="M50 80 L 100 130 L 115 125 L 180 30 L 200 35 L 250 80" fill="none" stroke="#a78bfa" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-2"><circle cx="115" cy="125" r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="130" y="135" fill="#3b82f6" fontSize="9" fontWeight="bold">BUY</text></g><g className="marker-entry delay-4"><circle cx="200" cy="35" r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="200" y="20" fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">SELL</text></g><g className="marker-target delay-5"><circle cx="250" cy="80" r="4" fill="#10b981" /><text x="265" y="85" fill="#10b981" fontSize="9" fontWeight="bold">TP</text></g></svg>);
-const PlayVisual_Trap = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 140 L 20 120 L 20 60 L 50 40 L 50 10 L 0 10 Z" fill="url(#volGradientRed)" /><line x1="0" y1="40" x2="300" y2="40" stroke="#cbd5e1" strokeWidth="2" strokeDasharray="5 5" /><text x="295" y="35" fill="#cbd5e1" fontSize="9" fontWeight="bold" textAnchor="end">LIQUIDITY (IBH/PDH)</text><path d="M30 80 L 80 40 L 120 15 L 140 25 L 130 50 L 150 50 L 180 100 L 250 140" fill="none" stroke="#64748b" strokeWidth="3" opacity="0.1" /><path d="M30 80 L 80 40 L 120 15 L 140 25 L 130 50 L 150 50 L 180 100 L 250 140" fill="none" stroke="#f43f5e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="delay-2 fade-in" style={{ opacity: 0, animation: 'fadeIn 0.5s forwards 2s' }}><rect x="100" y="5" width="60" height="40" fill="#f43f5e" fillOpacity="0.1" stroke="#f43f5e" strokeDasharray="2 2" /><text x="130" y="25" fill="#f43f5e" fontSize="9" fontStyle="italic" textAnchor="middle" fontWeight="bold">TRAPPED LONGS</text></g><g className="marker-entry delay-3"><circle cx="150" cy="50" r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="165" y="55" fill="#3b82f6" fontSize="9" fontWeight="bold">ENTRY</text></g><g className="marker-stop delay-4"><line x1="120" y1="10" x2="160" y2="10" stroke="#f43f5e" strokeWidth="2" /><text x="175" y="12" fill="#f43f5e" fontSize="8" fontWeight="bold">STOP</text></g><g className="marker-target delay-5"><circle cx="250" cy="140" r="6" fill="#10b981" /><text x="250" y="155" fill="#10b981" fontSize="10" fontWeight="bold" textAnchor="middle">TP</text></g></svg>);
-const PlayVisual_Sweep = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 10 L 30 30 L 30 100 L 10 120 L 0 140 Z" fill="url(#volGradient)" /><line x1="0" y1="110" x2="300" y2="110" stroke="#94a3b8" strokeWidth="1" /><rect x="0" y="110" width="300" height="30" fill="#0f172a" opacity="0.5" /><text x="295" y="105" fill="#94a3b8" fontSize="9" fontWeight="bold" textAnchor="end">KEY SUPPORT (IBL)</text><path d="M40 70 L 80 100 L 100 110 L 130 135 L 160 105 L 180 110 L 260 40" fill="none" stroke="#64748b" strokeWidth="3" opacity="0.1" /><path d="M40 70 L 80 100 L 100 110 L 130 135 L 160 105 L 180 110 L 260 40" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="delay-2 fade-in" style={{ opacity: 0, animation: 'fadeIn 0.5s forwards 2s' }}><circle cx="130" cy="135" r="6" fill="#f59e0b" fillOpacity="0.8" /><text x="130" y="152" fill="#f59e0b" fontSize="9" fontWeight="bold" textAnchor="middle">LIQ GRAB</text></g><g className="marker-entry delay-3"><circle cx="180" cy="110" r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="180" y="95" fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">RECLAIM</text></g><g className="marker-stop delay-4"><line x1="110" y1="145" x2="150" y2="145" stroke="#f43f5e" strokeWidth="2" /></g><g className="marker-target delay-5"><circle cx="260" cy="40" r="6" fill="#10b981" /></g></svg>);
-const PlayVisual_Compression = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><line x1="0" y1="50" x2="300" y2="50" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.3" /><line x1="0" y1="110" x2="300" y2="110" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.3" /><path d="M20 50 L 220 80" stroke="#64748b" strokeWidth="1" strokeDasharray="4 2" /><path d="M20 110 L 220 80" stroke="#64748b" strokeWidth="1" strokeDasharray="4 2" /><path d="M30 60 L 60 100 L 90 70 L 120 90 L 150 78 L 180 82 L 220 80 L 280 30" fill="none" stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><circle cx="220" cy="80" r="10" fill="none" stroke="#f59e0b" strokeWidth="1" className="delay-2 fade-in" style={{ opacity: 0, animation: 'fadeIn 0.5s forwards 2s' }} /><g className="marker-entry delay-3"><circle cx="220" cy="80" r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="220" y="105" fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">BREAK</text></g><g className="marker-target delay-5"><circle cx="280" cy="30" r="6" fill="#10b981" /></g></svg>);
-const PlayVisual_GapGo = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><rect x="20" y="100" width="20" height="40" fill="#475569" /><text x="30" y="150" fill="#64748b" fontSize="9" textAnchor="middle">Y'DAY</text><rect x="40" y="60" width="260" height="40" fill="#6366f1" fillOpacity="0.05" /><text x="150" y="85" fill="#6366f1" fontSize="10" fontWeight="bold" textAnchor="middle" opacity="0.3">GAP ZONE</text><line x1="0" y1="50" x2="300" y2="50" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" /><text x="295" y="45" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6">IBH</text><path d="M60 40 L 80 20 L 100 50 L 120 50 L 140 10 L 180 0 L 260 -5" fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-3"><circle cx="120" cy="50" r="5" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="120" y="70" fill="#3b82f6" fontSize="9" fontWeight="bold" textAnchor="middle">GAP HOLD</text></g><g className="marker-stop delay-4"><line x1="100" y1="80" x2="140" y2="80" stroke="#f43f5e" strokeWidth="2" /></g></svg>);
+// --- 1. TREND BULL (UP) ---
+const PlayVisual_TrendBull = () => ( 
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    <path d="M0 160 L 40 140 L 40 120 L 30 100 L 30 80 L 40 60 L 40 40 L 60 20 L 60 0 L 0 0 Z" fill="url(#volGradient)" />
+    
+    {/* Context */}
+    <line x1="0" y1="90" x2="300" y2="90" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" />
+    <text x="295" y="85" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB HIGH</text>
+    
+    {/* Price Action: Open, Test VWAP, Break IBH, Retest IBH, Extend */}
+    <path d="M20 120 L 60 100 L 90 110 L 140 80 L 170 90 L 250 20" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    
+    {/* Markers */}
+    <g className="marker-entry delay-3">
+        <circle cx="170" cy="90" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="170" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">RETEST</text>
+    </g>
+    <g className="marker-stop delay-2">
+        <line x1="150" y1="115" x2="190" y2="115" stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="2 2" />
+        <text x="195" y="118" fill="#f43f5e" fontSize="7" fontWeight="bold">STOP</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="250" cy="20" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="240" y="30" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">TP</text>
+    </g>
+</svg>
+);
+
+// --- 2. TREND BEAR (DOWN) - CORRECTED ---
+const PlayVisual_TrendBear = () => ( 
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    {/* Volume Profile Flipped/Adjusted */}
+    <path d="M0 0 L 30 20 L 30 40 L 50 60 L 50 80 L 30 100 L 30 120 L 20 140 L 20 160 L 0 160 Z" fill="url(#volGradientRed)" />
+    
+    {/* Context */}
+    <line x1="0" y1="70" x2="300" y2="70" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" />
+    <text x="295" y="65" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB LOW</text>
+    
+    {/* Price Action: Open, Fail at Mid, Break IBL, Retest IBL, Flush */}
+    <path d="M20 40 L 60 55 L 100 30 L 140 75 L 170 65 L 260 140" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    
+    {/* Markers */}
+    <g className="marker-entry delay-3">
+        <circle cx="170" cy="65" r="4" fill="#f43f5e" stroke="white" strokeWidth="1.5" />
+        <text x="170" y="55" fill="#f43f5e" fontSize="8" fontWeight="bold" textAnchor="middle">SHORT</text>
+    </g>
+    <g className="marker-stop delay-2">
+        <line x1="150" y1="45" x2="190" y2="45" stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="2 2" />
+        <text x="195" y="48" fill="#f43f5e" fontSize="7" fontWeight="bold">STOP</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="260" cy="140" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="270" y="150" fill="#10b981" fontSize="9" fontWeight="bold">TP</text>
+    </g>
+</svg>
+);
+
+// --- 3. BALANCE / RANGE (Rotational) ---
+const PlayVisual_Balance = () => ( 
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    <path d="M0 140 Q 80 80, 0 20 Z" fill="url(#volGradient)" />
+    <line x1="0" y1="30" x2="300" y2="30" stroke="#f97316" strokeWidth="1" opacity="0.4" />
+    <text x="295" y="25" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">VAH / RES</text>
+    <line x1="0" y1="130" x2="300" y2="130" stroke="#f97316" strokeWidth="1" opacity="0.4" />
+    <text x="295" y="145" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">VAL / SUP</text>
+    
+    <path d="M30 80 L 70 120 L 100 125 L 150 40 L 180 35 L 240 120" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    
+    <g className="marker-entry delay-2">
+        <circle cx="100" cy="125" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="100" y="140" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">BUY FADE</text>
+    </g>
+    <g className="marker-entry delay-4">
+        <circle cx="180" cy="35" r="4" fill="#f43f5e" stroke="white" strokeWidth="1.5" />
+        <text x="180" y="25" fill="#f43f5e" fontSize="8" fontWeight="bold" textAnchor="middle">SELL FADE</text>
+    </g>
+</svg>
+);
+
+// --- 4. WEEKLY TPO / COMPOSITE ---
+const PlayVisual_WeeklyTPO = () => ( 
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    {/* Composite Profile Background */}
+    <path d="M0 20 L 40 20 L 40 50 L 80 50 L 80 80 L 100 80 L 100 100 L 60 100 L 60 140 L 0 140 Z" fill="#6366f1" fillOpacity="0.1" stroke="#6366f1" strokeOpacity="0.2" />
+    
+    <line x1="0" y1="50" x2="300" y2="50" stroke="#a855f7" strokeWidth="1" strokeDasharray="4 2" />
+    <text x="295" y="45" fill="#a855f7" fontSize="8" textAnchor="end" fontWeight="bold">WEEKLY VAH</text>
+    
+    <line x1="0" y1="90" x2="300" y2="90" stroke="#f59e0b" strokeWidth="1.5" opacity="0.5" />
+    <text x="110" y="85" fill="#f59e0b" fontSize="8" fontWeight="bold">COMPOSITE POC</text>
+
+    {/* Price finding value at POC then rejecting */}
+    <path d="M200 140 L 220 110 L 210 90 L 230 88 L 220 92 L 240 50" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    
+    <g className="marker-entry delay-3">
+        <circle cx="230" cy="88" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="230" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">ACC/REJ</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="240" cy="50" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="250" y="45" fill="#10b981" fontSize="9" fontWeight="bold">TARGET</text>
+    </g>
+</svg>
+);
+
+// --- 5. IB EXTREME BREAK (FAKE vs REAL) ---
+const PlayVisual_IBBreak = () => ( 
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    
+    <rect x="0" y="60" width="300" height="40" fill="#f97316" fillOpacity="0.05" />
+    <line x1="0" y1="60" x2="300" y2="60" stroke="#f97316" strokeWidth="1" strokeDasharray="4 4" />
+    <text x="295" y="55" fill="#f97316" fontSize="8" textAnchor="end" fontWeight="bold">IB HIGH</text>
+    
+    {/* Scenario A: Fakeout (Dashed) */}
+    <path d="M20 80 L 60 70 L 100 50 L 120 45 L 140 70 L 160 90" fill="none" stroke="#64748b" strokeWidth="1.5" strokeDasharray="3 3" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1s'}} />
+    <text x="120" y="35" fill="#64748b" fontSize="8" textAnchor="middle" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1s'}}>TRAP?</text>
+
+    {/* Scenario B: Continuation (Solid) */}
+    <path d="M20 80 L 60 70 L 100 50 L 130 55 L 160 30 L 220 10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    
+    <g className="marker-entry delay-3">
+        <circle cx="130" cy="55" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="130" y="70" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">FLIP/HOLD</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="220" cy="10" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="210" y="20" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">EXT</text>
+    </g>
+</svg>
+);
+
+// --- 6. TRAP / FAKEOUT ---
+const PlayVisual_Trap = () => (
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    <line x1="0" y1="60" x2="300" y2="60" stroke="#f43f5e" strokeWidth="1" strokeDasharray="4 2" />
+    <text x="295" y="55" fill="#f43f5e" fontSize="8" textAnchor="end" fontWeight="bold">RESISTANCE / HOD</text>
+    <path d="M20 100 L 60 80 L 100 70 L 130 50 L 150 55 L 180 90 L 240 130" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    <rect x="110" y="40" width="50" height="30" fill="#f43f5e" fillOpacity="0.1" stroke="#f43f5e" strokeWidth="0.5" strokeDasharray="2 2" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 2s'}} />
+    <text x="135" y="35" fill="#f43f5e" fontSize="8" textAnchor="middle" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 2s'}}>TRAP ZONE</text>
+    <g className="marker-entry delay-3">
+        <circle cx="165" cy="75" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="175" y="70" fill="#3b82f6" fontSize="8" fontWeight="bold">SHORT</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="240" cy="130" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="250" y="140" fill="#10b981" fontSize="9" fontWeight="bold">TP</text>
+    </g>
+  </svg>
+);
+
+// --- 7. SWEEP ---
+const PlayVisual_Sweep = () => (
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    <line x1="0" y1="120" x2="300" y2="120" stroke="#38bdf8" strokeWidth="1" strokeDasharray="4 2" />
+    <text x="295" y="115" fill="#38bdf8" fontSize="8" textAnchor="end" fontWeight="bold">OLD LOW / LIQ</text>
+    <path d="M20 80 L 60 100 L 100 115 L 130 135 L 150 125 L 180 80 L 250 40" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    <circle cx="130" cy="135" r="15" fill="#38bdf8" fillOpacity="0.1" stroke="#38bdf8" strokeWidth="0.5" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1.5s'}} />
+    <g className="marker-entry delay-3">
+        <circle cx="165" cy="100" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="175" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold">RECLAIM</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="250" cy="40" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="260" y="35" fill="#10b981" fontSize="9" fontWeight="bold">TP</text>
+    </g>
+  </svg>
+);
+
+// --- 8. COMPRESSION ---
+const PlayVisual_Compression = () => (
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    <line x1="20" y1="40" x2="200" y2="80" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 2" opacity="0.5" />
+    <line x1="20" y1="140" x2="200" y2="90" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 2" opacity="0.5" />
+    <path d="M20 50 L 50 130 L 90 60 L 130 110 L 160 80 L 190 95 L 220 30" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    <g className="marker-entry delay-3">
+        <circle cx="190" cy="95" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="190" y="115" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">BREAK</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="220" cy="30" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="230" y="25" fill="#10b981" fontSize="9" fontWeight="bold">EXPANSION</text>
+    </g>
+  </svg>
+);
+
+// --- 9. GAP & GO ---
+const PlayVisual_GapGo = () => (
+  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
+    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
+    <rect x="20" y="100" width="40" height="40" fill="#64748b" fillOpacity="0.2" />
+    <text x="40" y="150" fill="#64748b" fontSize="8" textAnchor="middle">PRIOR RANGE</text>
+    <rect x="60" y="60" width="40" height="40" fill="url(#volGradient)" opacity="0.5" />
+    <text x="80" y="70" fill="#6366f1" fontSize="8" textAnchor="middle" fontWeight="bold">GAP</text>
+    <path d="M100 60 L 120 75 L 140 65 L 180 30 L 250 10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+    <g className="marker-entry delay-2">
+        <circle cx="120" cy="75" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
+        <text x="120" y="90" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">DIP BUY</text>
+    </g>
+    <g className="marker-target delay-5">
+        <circle cx="250" cy="10" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
+        <text x="240" y="20" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">GO</text>
+    </g>
+  </svg>
+);
+
 const PlayVisual_Generic = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><rect x="50" y="40" width="200" height="80" fill="#1e293b" rx="8" /><path d="M70 100 L 110 80 L 150 90 L 190 50" fill="none" stroke="#10b981" strokeWidth="3" className="path-draw" /><circle cx="110" cy="80" r="5" fill="#3b82f6" className="marker-entry delay-3" /><circle cx="190" cy="50" r="5" fill="#10b981" className="marker-target delay-5" /></svg>);
 
+// --- LOGIC MAPPING ---
 const getVisualForTitle = (title: string) => {
     const t = title.toLowerCase();
-    if (t.includes('trend') || t.includes('drive') || t.includes('go-with')) return PlayVisual_Trend;
-    if (t.includes('balance') || t.includes('range') || t.includes('rotational') || t.includes('fade')) return PlayVisual_Balance;
-    if (t.includes('trap') || t.includes('failed') || t.includes('fake') || t.includes('reject')) return PlayVisual_Trap;
+    
+    // Explicit exclusions/Generic
+    if (t.includes('opening range')) return null; // No animation requested for this
+
+    if (t.includes('weekly') || t.includes('composite')) return PlayVisual_WeeklyTPO;
+    if (t.includes('ib extreme') || t.includes('break play')) return PlayVisual_IBBreak;
+
+    if (t.includes('bear') || t.includes('down') || t.includes('short')) return PlayVisual_TrendBear;
+    
+    if (t.includes('trend') || t.includes('drive') || t.includes('go-with')) return PlayVisual_TrendBull;
+    
+    // P-Day / Skewed Balance -> Use Balance Logic
+    if (t.includes('balance') || t.includes('range') || t.includes('rotational') || t.includes('fade') || t.includes('skew') || t.includes('p-day') || t.includes('b-day')) return PlayVisual_Balance;
+    
+    if (t.includes('trap') || t.includes('failed') || t.includes('fake') || t.includes('reject')) return PlayVisual_Trap; 
     if (t.includes('sweep') || t.includes('liquidity') || t.includes('stop') || t.includes('reclaim')) return PlayVisual_Sweep;
     if (t.includes('coil') || t.includes('compress') || t.includes('squeeze') || t.includes('inside')) return PlayVisual_Compression;
     if (t.includes('gap')) return PlayVisual_GapGo;
+    
     return PlayVisual_Generic;
 };
 
+// --- DATA PARSING ---
 const parsePlaybookMarkdown = (text: string) => {
     const sections = text.split(/^#{2,3}\s+/m).slice(1);
     return sections.map(section => {
         const lines = section.split('\n');
         const title = lines[0].trim();
         const content = lines.slice(1).join('\n').trim();
+        
+        // Extract specific fields if they exist
+        const extractField = (header: string) => {
+            const regex = new RegExp(`(?:\\*\\*|###)\\s*${header}.*?(?:\\n|:)(.*?)(?=(?:\\*\\*|###)|$)`, 'is');
+            const match = content.match(regex);
+            return match ? match[1].trim() : null;
+        };
+
+        const bias = extractField('Bias');
+        const clues = extractField('Clues');
+        const entryModel = extractField('Entry Model') || extractField('Entry');
+        const stop = extractField('Stop') || extractField('Invalidation');
+        const target = extractField('Target') || extractField('Targets');
+        const caution = extractField('Caution') || extractField('Risk');
+        const notes = extractField('Note') || extractField('Notes');
+
         const descMatch = content.match(/^[^*-]+/);
-        const desc = descMatch ? descMatch[0].replace(/\n/g, ' ').trim() : "";
-        const rules = content.match(/^[-*]\s+(.+)$/gm)?.map(r => r.replace(/^[-*]\s+/, '').trim()) || [];
+        const desc = descMatch ? descMatch[0].replace(/\n/g, ' ').trim() : "Execution Protocol";
+
+        // If no specific fields found, fallback to generic rules extraction
+        const genericRules = content.match(/^[-*]\s+(.+)$/gm)?.map(r => r.replace(/^[-*]\s+/, '').trim()) || [];
+
         return {
             id: title.toLowerCase().replace(/[^a-z0-9]/g, '-'),
             title,
-            desc: desc || "Strategy execution details.",
-            rules: rules.length > 0 ? rules : ["No specific rules found in markdown."],
+            desc,
+            structured: {
+                bias, clues, entryModel, stop, target, caution, notes
+            },
+            genericRules,
             visual: getVisualForTitle(title)
         };
     });
@@ -143,21 +391,36 @@ const parsePlaybookMarkdown = (text: string) => {
 const PlaybookCard = ({ item, onClick }: { item: any, onClick: () => void }) => {
   const Visual = item.visual;
   return (
-    <div onClick={onClick} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-indigo-500 transition-all group hover:bg-slate-800/80 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)] cursor-pointer h-full flex flex-col">
-        <div className="aspect-[2/1] bg-slate-950 rounded-xl mb-4 overflow-hidden relative border border-slate-800 group-hover:border-indigo-500/30 transition-colors shadow-inner">
-            <div className="absolute inset-0 p-2 opacity-90 group-hover:opacity-100 transition-all duration-500"><Visual /></div>
-            <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/80 p-1.5 rounded-lg border border-slate-800 backdrop-blur-sm">
-                <div className="flex items-center gap-1 text-[8px] font-bold text-blue-400"><MousePointerClick className="w-3 h-3"/> Entry</div>
-                <div className="flex items-center gap-1 text-[8px] font-bold text-rose-400"><Ban className="w-3 h-3"/> Stop</div>
-                <div className="flex items-center gap-1 text-[8px] font-bold text-emerald-400"><Flag className="w-3 h-3"/> TP</div>
+    <div onClick={onClick} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-indigo-500 transition-all group hover:bg-slate-800/80 hover:shadow-[0_0_30px_rgba(99,102,241,0.15)] cursor-pointer h-full flex flex-col relative overflow-hidden">
+        {Visual ? (
+            <div className="aspect-[2/1] bg-slate-950 rounded-xl mb-4 overflow-hidden relative border border-slate-800 group-hover:border-indigo-500/30 transition-colors shadow-inner">
+                <div className="absolute inset-0 p-2 opacity-90 group-hover:opacity-100 transition-all duration-500"><Visual /></div>
+                <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950/80 p-1.5 rounded-lg border border-slate-800 backdrop-blur-sm">
+                    <div className="flex items-center gap-1 text-[8px] font-bold text-blue-400"><MousePointerClick className="w-3 h-3"/> Entry</div>
+                    <div className="flex items-center gap-1 text-[8px] font-bold text-rose-400"><Ban className="w-3 h-3"/> Stop</div>
+                    <div className="flex items-center gap-1 text-[8px] font-bold text-emerald-400"><Flag className="w-3 h-3"/> TP</div>
+                </div>
             </div>
-        </div>
+        ) : (
+            <div className="aspect-[2/1] bg-slate-950 rounded-xl mb-4 flex items-center justify-center border border-slate-800 text-slate-700">
+                <FileText className="w-8 h-8 opacity-20" />
+            </div>
+        )}
+        
         <div className="flex items-start justify-between mb-2">
-            <h3 className="text-sm font-black uppercase text-slate-200 group-hover:text-indigo-400 transition-colors">{item.title}</h3>
-            <div className="p-1.5 rounded-lg bg-slate-950 text-slate-500 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 transition-colors"><Activity className="w-3.5 h-3.5" /></div>
+            <h3 className="text-sm font-black uppercase text-slate-200 group-hover:text-indigo-400 transition-colors line-clamp-2">{item.title}</h3>
+            {item.structured.bias && (
+                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${item.structured.bias.toLowerCase().includes('bull') ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : item.structured.bias.toLowerCase().includes('bear') ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
+                    {item.structured.bias.toUpperCase()}
+                </span>
+            )}
         </div>
-        <p className="text-xs text-slate-400 leading-relaxed font-medium flex-1 line-clamp-3">{item.desc}</p>
-        <div className="mt-4 pt-3 border-t border-slate-800 flex items-center gap-2 text-[10px] font-mono font-bold text-slate-500 group-hover:text-slate-300">
+        
+        <p className="text-xs text-slate-400 leading-relaxed font-medium flex-1 line-clamp-3 mb-4">
+            {item.structured.clues || item.desc}
+        </p>
+        
+        <div className="mt-auto pt-3 border-t border-slate-800 flex items-center gap-2 text-[10px] font-mono font-bold text-slate-500 group-hover:text-slate-300">
             <PlayCircle className="w-3 h-3 text-indigo-500" /><span>View Execution Rules</span>
             <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity transform -translate-x-2 group-hover:translate-x-0 text-indigo-400" />
         </div>
@@ -165,7 +428,7 @@ const PlaybookCard = ({ item, onClick }: { item: any, onClick: () => void }) => 
   );
 };
 
-// --- BACKTEST LOGIC ---
+// --- BACKTEST LOGIC (Unchanged from previous robust version) ---
 const extractLevels = (text: string) => {
     const extract = (str: string, pattern: RegExp) => {
         const match = str.match(pattern);
@@ -176,7 +439,6 @@ const extractLevels = (text: string) => {
         return null;
     };
 
-    // Parse specific blocks to avoid finding the first match in the whole document
     const parseBlock = (block: string) => ({
         entry: extract(block, /Entry Zone:\*\*.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Entry Zone:\*\*.*?([\d,.]+)/i),
         stop: extract(block, /Risk Exit.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Risk Exit.*?:.*?([\d,.]+)/i) || extract(block, /Stop.*?:.*?([\d,.]+)/i),
@@ -199,7 +461,6 @@ const extractLevels = (text: string) => {
         if (data.entry && (data.stop || data.tp1)) hedge = data;
     }
 
-    // Fallback if parsing fails on specific sections
     if (!primary) {
         const data = parseBlock(text);
         if (data.entry && data.stop) primary = data;
@@ -230,52 +491,10 @@ const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
     const initialRisk = Math.abs(entry - stop);
     const safeRisk = initialRisk < 0.25 ? 1 : initialRisk;
 
-    // --- STRATEGY STATES ---
-    
-    // 1. FIXED (Standard)
-    let fixed = {
-        status: 'PENDING',
-        result: 'NEUTRAL',
-        exitPrice: 0,
-        exitTime: '',
-        entryTime: '',
-        maxFavorable: 0,
-        realizedPnL: 0,
-        realizedRR: 0
-    };
+    let fixed = { status: 'PENDING', result: 'NEUTRAL', exitPrice: 0, exitTime: '', entryTime: '', maxFavorable: 0, realizedPnL: 0, realizedRR: 0 };
+    let smart = { status: 'PENDING', result: 'NEUTRAL', exitPrice: 0, exitTime: '', entryTime: '', maxFavorable: 0, realizedPnL: 0, realizedRR: 0, stopPrice: stop, beTriggered: false };
+    let trail = { status: 'PENDING', result: 'NEUTRAL', exitPrice: 0, exitTime: '', entryTime: '', maxFavorable: 0, realizedPnL: 0, realizedRR: 0, stopPrice: stop, current5mHigh: -Infinity, current5mLow: Infinity, last5mPeriod: '' };
 
-    // 2. SMART BE (Move to Entry after 5m + displacement)
-    let smart = {
-        status: 'PENDING',
-        result: 'NEUTRAL',
-        exitPrice: 0,
-        exitTime: '',
-        entryTime: '',
-        maxFavorable: 0,
-        realizedPnL: 0,
-        realizedRR: 0,
-        stopPrice: stop,
-        beTriggered: false
-    };
-
-    // 3. TRAIL 5M (Trail stop behind 5m candles)
-    let trail = {
-        status: 'PENDING',
-        result: 'NEUTRAL',
-        exitPrice: 0,
-        exitTime: '',
-        entryTime: '',
-        maxFavorable: 0,
-        realizedPnL: 0,
-        realizedRR: 0,
-        stopPrice: stop,
-        // Trailing Helpers
-        current5mHigh: -Infinity,
-        current5mLow: Infinity,
-        last5mPeriod: ''
-    };
-
-    // Helper to calculate PnL/RR/Result for a closed trade
     const finalize = (state: any, exitP: number, time: string, reason: string) => {
         state.status = 'CLOSED';
         state.exitPrice = exitP;
@@ -287,25 +506,21 @@ const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
     };
 
     for (const snap of futureSnapshots) {
-        const price = snap.input.intraday.ib.current_close; // Close as proxy
+        const price = snap.input.intraday.ib.current_close;
         const time = snap.input.current_et_time;
         const [hh, mm] = time.split(':').map(Number);
         
-        // Determine 5m Period (e.g., 09:30, 09:35)
         const periodIndex = Math.floor(mm / 5);
         const current5mPeriod = `${hh}:${periodIndex}`;
 
-        // --- TRIGGER LOGIC (Shared) ---
-        // Assuming limit fill if price touches/passes entry
         const entryTriggered = (fixed.status === 'PENDING') && (
-            (isLong && price <= entry * 1.0005 && price >= entry * 0.9995) || // Touch
-            (isLong && price < entry) || // Gap through
+            (isLong && price <= entry * 1.0005 && price >= entry * 0.9995) || 
+            (isLong && price < entry) || 
             (!isLong && price >= entry * 0.9995 && price <= entry * 1.0005) ||
             (!isLong && price > entry)
         );
 
         if (entryTriggered) {
-            // Activate all strategies
             [fixed, smart, trail].forEach(s => {
                 if (s.status === 'PENDING') {
                     s.status = 'OPEN';
@@ -314,7 +529,6 @@ const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
             });
         }
 
-        // --- UPDATE RUNNING STATS ---
         if (fixed.status === 'OPEN') {
             const diff = price - entry;
             const curPnL = isLong ? diff : -diff;
@@ -323,84 +537,56 @@ const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
             trail.maxFavorable = Math.max(trail.maxFavorable, curPnL);
         }
 
-        // --- STRATEGY 1: FIXED ---
         if (fixed.status === 'OPEN') {
-            // Check Stop
             if ((isLong && price <= stop) || (!isLong && price >= stop)) {
                 finalize(fixed, stop, time, 'LOSS');
-            }
-            // Check TP
-            else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
+            } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
                 finalize(fixed, tp1, time, 'WIN (TP1)');
             }
         }
 
-        // --- STRATEGY 2: SMART BE ---
         if (smart.status === 'OPEN') {
-            // Check Dynamic Stop
             if ((isLong && price <= smart.stopPrice) || (!isLong && price >= smart.stopPrice)) {
                 const res = Math.abs(smart.stopPrice - entry) < 0.5 ? 'BE (SCRATCH)' : 'LOSS';
                 finalize(smart, smart.stopPrice, time, res);
-            }
-            // Check TP
-            else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
+            } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
                 finalize(smart, tp1, time, 'WIN (TP1)');
-            }
-            // Update Logic: Move to BE if > 4pts profit (Displacement Simulation)
-            else if (!smart.beTriggered) {
+            } else if (!smart.beTriggered) {
                 const currentProfit = isLong ? price - entry : entry - price;
-                if (currentProfit > 4.0) { // 4 points ~ FVG displacement proxy
+                if (currentProfit > 4.0) {
                     smart.stopPrice = entry;
                     smart.beTriggered = true;
                 }
             }
         }
 
-        // --- STRATEGY 3: TRAIL 5M ---
         if (trail.status === 'OPEN') {
-            // Update current 5m candle stats
             trail.current5mHigh = Math.max(trail.current5mHigh, price);
             trail.current5mLow = Math.min(trail.current5mLow, price);
 
-            // Check Dynamic Stop
             if ((isLong && price <= trail.stopPrice) || (!isLong && price >= trail.stopPrice)) {
                 const pnl = isLong ? trail.stopPrice - entry : entry - trail.stopPrice;
                 const label = pnl > 0 ? 'TRAIL WIN' : pnl > -0.5 && pnl < 0.5 ? 'TRAIL BE' : 'TRAIL LOSS';
                 finalize(trail, trail.stopPrice, time, label);
-            }
-            // Check TP (Trail strategy usually holds for runner, but let's respect TP1 for consistency/comparison)
-            else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
+            } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
                 finalize(trail, tp1, time, 'WIN (TP1)');
             }
             
-            // Logic: Period Close Updates
-            // If the 5m period index changes, the previous candle closed.
             if (trail.last5mPeriod && trail.last5mPeriod !== current5mPeriod) {
                 if (isLong) {
-                    // Move stop to Low of completed candle (if higher than current stop)
-                    if (trail.current5mLow > trail.stopPrice) {
-                        trail.stopPrice = trail.current5mLow;
-                    }
+                    if (trail.current5mLow > trail.stopPrice) trail.stopPrice = trail.current5mLow;
                 } else {
-                    // Move stop to High of completed candle (if lower than current stop)
-                    if (trail.current5mHigh < trail.stopPrice) {
-                        trail.stopPrice = trail.current5mHigh;
-                    }
+                    if (trail.current5mHigh < trail.stopPrice) trail.stopPrice = trail.current5mHigh;
                 }
-                // Reset for new candle
                 trail.current5mHigh = -Infinity;
                 trail.current5mLow = Infinity;
             }
             trail.last5mPeriod = current5mPeriod;
         }
 
-        // Optimization: Break if all closed
-        if (fixed.status === 'CLOSED' && smart.status === 'CLOSED' && trail.status === 'CLOSED') {
-            break;
-        }
+        if (fixed.status === 'CLOSED' && smart.status === 'CLOSED' && trail.status === 'CLOSED') break;
     }
 
-    // Force Close at EOD if still open
     const eodPrice = futureSnapshots[futureSnapshots.length - 1].input.intraday.ib.current_close;
     const eodTime = futureSnapshots[futureSnapshots.length - 1].input.current_et_time;
 
@@ -412,13 +598,7 @@ const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
         }
     });
 
-    return { 
-        fixed: fixed as SimResult, 
-        smart: smart as SimResult, 
-        trail: trail as SimResult,
-        direction: isLong ? 'LONG' : 'SHORT',
-        entryPrice: entry
-    };
+    return { fixed: fixed as SimResult, smart: smart as SimResult, trail: trail as SimResult, direction: isLong ? 'LONG' : 'SHORT', entryPrice: entry };
 };
 
 const StrategyComparisonRow = ({ label, data, icon: Icon }: any) => (
@@ -838,27 +1018,57 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
                                    <button onClick={() => setSelectedPlay(null)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400">
                                        <ArrowRight className="w-5 h-5 rotate-180" />
                                    </button>
-                                   <h2 className="text-xl font-black uppercase text-indigo-400">{selectedPlay.title}</h2>
+                                   <div>
+                                       <h2 className="text-xl font-black uppercase text-indigo-400">{selectedPlay.title}</h2>
+                                       {selectedPlay.structured.bias && <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ml-2 ${selectedPlay.structured.bias.toLowerCase().includes('bull') ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>{selectedPlay.structured.bias}</span>}
+                                   </div>
                                </div>
                                <button onClick={() => setSelectedPlay(null)} className="p-2 text-slate-500 hover:text-white"><X className="w-6 h-6"/></button>
                            </div>
                            <div className="flex-1 overflow-y-auto p-8 flex flex-col lg:flex-row gap-8">
-                               <div className="lg:w-1/2 aspect-video bg-slate-900 rounded-2xl border border-slate-800 p-8 flex items-center justify-center shadow-2xl">
-                                    <div className="w-full h-full transform scale-110">
-                                        <selectedPlay.visual />
-                                    </div>
+                               <div className="lg:w-5/12 flex flex-col gap-6">
+                                   <div className="aspect-video bg-slate-900 rounded-2xl border border-slate-800 p-8 flex items-center justify-center shadow-2xl relative overflow-hidden">
+                                        <div className="w-full h-full transform scale-110">
+                                            {selectedPlay.visual ? <selectedPlay.visual /> : <Activity className="w-16 h-16 text-slate-800"/>}
+                                        </div>
+                                   </div>
+                                   
+                                   {/* Structured Details */}
+                                   <div className="grid grid-cols-2 gap-3">
+                                       <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                           <div className="flex items-center gap-2 mb-2 text-blue-400 font-bold text-xs uppercase"><MousePointerClick className="w-3 h-3" /> Entry Model</div>
+                                           <p className="text-sm text-slate-300 font-medium leading-snug">{selectedPlay.structured.entryModel || 'N/A'}</p>
+                                       </div>
+                                       <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                           <div className="flex items-center gap-2 mb-2 text-rose-400 font-bold text-xs uppercase"><Ban className="w-3 h-3" /> Invalid (Stop)</div>
+                                           <p className="text-sm text-slate-300 font-medium leading-snug">{selectedPlay.structured.stop || 'N/A'}</p>
+                                       </div>
+                                       <div className="col-span-2 bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                                           <div className="flex items-center gap-2 mb-2 text-emerald-400 font-bold text-xs uppercase"><Flag className="w-3 h-3" /> Targets</div>
+                                           <p className="text-sm text-slate-300 font-medium leading-snug">{selectedPlay.structured.target || 'N/A'}</p>
+                                       </div>
+                                   </div>
                                </div>
-                               <div className="lg:w-1/2 space-y-8">
+
+                               <div className="lg:w-7/12 space-y-6">
                                    <div>
                                        <h3 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-2">Strategy Concept</h3>
-                                       <p className="text-lg font-medium text-slate-200 leading-relaxed">{selectedPlay.desc}</p>
+                                       <p className="text-base font-medium text-slate-200 leading-relaxed bg-slate-900/30 p-4 rounded-xl border border-slate-800">{selectedPlay.desc}</p>
                                    </div>
+
+                                   {selectedPlay.structured.clues && (
+                                       <div>
+                                           <h3 className="text-sm font-black uppercase tracking-widest text-amber-500 mb-2 flex items-center gap-2"><Info className="w-4 h-4"/> Key Clues</h3>
+                                           <p className="text-sm text-slate-300 bg-amber-500/5 p-4 rounded-xl border border-amber-500/10 leading-relaxed">{selectedPlay.structured.clues}</p>
+                                       </div>
+                                   )}
+
                                    <div className="bg-slate-900/50 rounded-2xl border border-slate-800 p-6">
-                                       <h3 className="text-sm font-black uppercase tracking-widest text-emerald-500 mb-4 flex items-center gap-2">
-                                           <CheckCircle2 className="w-4 h-4" /> Execution Rules
+                                       <h3 className="text-sm font-black uppercase tracking-widest text-indigo-500 mb-4 flex items-center gap-2">
+                                           <CheckCircle2 className="w-4 h-4" /> Execution Checklist
                                        </h3>
-                                       <ul className="space-y-4">
-                                           {selectedPlay.rules.map((rule: string, i: number) => (
+                                       <ul className="space-y-3">
+                                           {selectedPlay.genericRules.map((rule: string, i: number) => (
                                                <li key={i} className="flex gap-3 text-sm text-slate-300 leading-relaxed">
                                                    <span className="text-indigo-500 font-bold select-none">{i+1}.</span>
                                                    <span>{rule}</span>
@@ -866,6 +1076,16 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
                                            ))}
                                        </ul>
                                    </div>
+
+                                   {selectedPlay.structured.caution && (
+                                       <div className="bg-rose-500/10 p-4 rounded-xl border border-rose-500/20 flex gap-3">
+                                           <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                                           <div>
+                                               <h4 className="text-xs font-black uppercase text-rose-400 mb-1">Caution</h4>
+                                               <p className="text-sm text-rose-200/80">{selectedPlay.structured.caution}</p>
+                                           </div>
+                                       </div>
+                                   )}
                                </div>
                            </div>
                       </div>
