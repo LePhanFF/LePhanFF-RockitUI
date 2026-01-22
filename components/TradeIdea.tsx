@@ -1,7 +1,8 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot } from '../types';
 import { GoogleGenAI } from "@google/genai";
+import { PLAYBOOK_URL, PSYCH_URL } from '../utils/dataHelpers';
 import { 
   Lightbulb, 
   Target, 
@@ -36,7 +37,11 @@ import {
   ArrowRightLeft,
   Footprints,
   Info,
-  Maximize2
+  Maximize2,
+  RefreshCw,
+  Camera,
+  ImagePlus,
+  Trash2
 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
 
@@ -45,9 +50,6 @@ interface TradeIdeaProps {
   currentSnapshot: MarketSnapshot;
   isGlobalChatOpen?: boolean;
 }
-
-const PLAYBOOK_URL = "https://storage.googleapis.com/rockit-data/inference/playbooks.md";
-const PSYCH_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-psychology.md";
 
 // --- ANIMATION STYLES & COMMON DEFS ---
 const AnimStyles = () => (
@@ -106,261 +108,59 @@ const CommonDefs = () => (
   </defs>
 );
 
-// --- 1. TREND BULL (UP) ---
-const PlayVisual_TrendBull = () => ( 
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    <path d="M0 160 L 40 140 L 40 120 L 30 100 L 30 80 L 40 60 L 40 40 L 60 20 L 60 0 L 0 0 Z" fill="url(#volGradient)" />
-    
-    {/* Context */}
-    <line x1="0" y1="90" x2="300" y2="90" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" />
-    <text x="295" y="85" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB HIGH</text>
-    
-    {/* Price Action: Open, Test VWAP, Break IBH, Retest IBH, Extend */}
-    <path d="M20 120 L 60 100 L 90 110 L 140 80 L 170 90 L 250 20" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    
-    {/* Markers */}
-    <g className="marker-entry delay-3">
-        <circle cx="170" cy="90" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="170" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">RETEST</text>
-    </g>
-    <g className="marker-stop delay-2">
-        <line x1="150" y1="115" x2="190" y2="115" stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="2 2" />
-        <text x="195" y="118" fill="#f43f5e" fontSize="7" fontWeight="bold">STOP</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="250" cy="20" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="240" y="30" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">TP</text>
-    </g>
-</svg>
-);
-
-// --- 2. TREND BEAR (DOWN) - CORRECTED ---
-const PlayVisual_TrendBear = () => ( 
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    {/* Volume Profile Flipped/Adjusted */}
-    <path d="M0 0 L 30 20 L 30 40 L 50 60 L 50 80 L 30 100 L 30 120 L 20 140 L 20 160 L 0 160 Z" fill="url(#volGradientRed)" />
-    
-    {/* Context */}
-    <line x1="0" y1="70" x2="300" y2="70" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" />
-    <text x="295" y="65" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB LOW</text>
-    
-    {/* Price Action: Open, Fail at Mid, Break IBL, Retest IBL, Flush */}
-    <path d="M20 40 L 60 55 L 100 30 L 140 75 L 170 65 L 260 140" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    
-    {/* Markers */}
-    <g className="marker-entry delay-3">
-        <circle cx="170" cy="65" r="4" fill="#f43f5e" stroke="white" strokeWidth="1.5" />
-        <text x="170" y="55" fill="#f43f5e" fontSize="8" fontWeight="bold" textAnchor="middle">SHORT</text>
-    </g>
-    <g className="marker-stop delay-2">
-        <line x1="150" y1="45" x2="190" y2="45" stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="2 2" />
-        <text x="195" y="48" fill="#f43f5e" fontSize="7" fontWeight="bold">STOP</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="260" cy="140" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="270" y="150" fill="#10b981" fontSize="9" fontWeight="bold">TP</text>
-    </g>
-</svg>
-);
-
-// --- 3. BALANCE / RANGE (Rotational) ---
-const PlayVisual_Balance = () => ( 
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    <path d="M0 140 Q 80 80, 0 20 Z" fill="url(#volGradient)" />
-    <line x1="0" y1="30" x2="300" y2="30" stroke="#f97316" strokeWidth="1" opacity="0.4" />
-    <text x="295" y="25" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">VAH / RES</text>
-    <line x1="0" y1="130" x2="300" y2="130" stroke="#f97316" strokeWidth="1" opacity="0.4" />
-    <text x="295" y="145" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">VAL / SUP</text>
-    
-    <path d="M30 80 L 70 120 L 100 125 L 150 40 L 180 35 L 240 120" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    
-    <g className="marker-entry delay-2">
-        <circle cx="100" cy="125" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="100" y="140" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">BUY FADE</text>
-    </g>
-    <g className="marker-entry delay-4">
-        <circle cx="180" cy="35" r="4" fill="#f43f5e" stroke="white" strokeWidth="1.5" />
-        <text x="180" y="25" fill="#f43f5e" fontSize="8" fontWeight="bold" textAnchor="middle">SELL FADE</text>
-    </g>
-</svg>
-);
-
-// --- 4. WEEKLY TPO / COMPOSITE ---
-const PlayVisual_WeeklyTPO = () => ( 
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    {/* Composite Profile Background */}
-    <path d="M0 20 L 40 20 L 40 50 L 80 50 L 80 80 L 100 80 L 100 100 L 60 100 L 60 140 L 0 140 Z" fill="#6366f1" fillOpacity="0.1" stroke="#6366f1" strokeOpacity="0.2" />
-    
-    <line x1="0" y1="50" x2="300" y2="50" stroke="#a855f7" strokeWidth="1" strokeDasharray="4 2" />
-    <text x="295" y="45" fill="#a855f7" fontSize="8" textAnchor="end" fontWeight="bold">WEEKLY VAH</text>
-    
-    <line x1="0" y1="90" x2="300" y2="90" stroke="#f59e0b" strokeWidth="1.5" opacity="0.5" />
-    <text x="110" y="85" fill="#f59e0b" fontSize="8" fontWeight="bold">COMPOSITE POC</text>
-
-    {/* Price finding value at POC then rejecting */}
-    <path d="M200 140 L 220 110 L 210 90 L 230 88 L 220 92 L 240 50" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    
-    <g className="marker-entry delay-3">
-        <circle cx="230" cy="88" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="230" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">ACC/REJ</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="240" cy="50" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="250" y="45" fill="#10b981" fontSize="9" fontWeight="bold">TARGET</text>
-    </g>
-</svg>
-);
-
-// --- 5. IB EXTREME BREAK (FAKE vs REAL) ---
-const PlayVisual_IBBreak = () => ( 
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    
-    <rect x="0" y="60" width="300" height="40" fill="#f97316" fillOpacity="0.05" />
-    <line x1="0" y1="60" x2="300" y2="60" stroke="#f97316" strokeWidth="1" strokeDasharray="4 4" />
-    <text x="295" y="55" fill="#f97316" fontSize="8" textAnchor="end" fontWeight="bold">IB HIGH</text>
-    
-    {/* Scenario A: Fakeout (Dashed) */}
-    <path d="M20 80 L 60 70 L 100 50 L 120 45 L 140 70 L 160 90" fill="none" stroke="#64748b" strokeWidth="1.5" strokeDasharray="3 3" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1s'}} />
-    <text x="120" y="35" fill="#64748b" fontSize="8" textAnchor="middle" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1s'}}>TRAP?</text>
-
-    {/* Scenario B: Continuation (Solid) */}
-    <path d="M20 80 L 60 70 L 100 50 L 130 55 L 160 30 L 220 10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    
-    <g className="marker-entry delay-3">
-        <circle cx="130" cy="55" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="130" y="70" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">FLIP/HOLD</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="220" cy="10" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="210" y="20" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">EXT</text>
-    </g>
-</svg>
-);
-
-// --- 6. TRAP / FAKEOUT ---
-const PlayVisual_Trap = () => (
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    <line x1="0" y1="60" x2="300" y2="60" stroke="#f43f5e" strokeWidth="1" strokeDasharray="4 2" />
-    <text x="295" y="55" fill="#f43f5e" fontSize="8" textAnchor="end" fontWeight="bold">RESISTANCE / HOD</text>
-    <path d="M20 100 L 60 80 L 100 70 L 130 50 L 150 55 L 180 90 L 240 130" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    <rect x="110" y="40" width="50" height="30" fill="#f43f5e" fillOpacity="0.1" stroke="#f43f5e" strokeWidth="0.5" strokeDasharray="2 2" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 2s'}} />
-    <text x="135" y="35" fill="#f43f5e" fontSize="8" textAnchor="middle" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 2s'}}>TRAP ZONE</text>
-    <g className="marker-entry delay-3">
-        <circle cx="165" cy="75" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="175" y="70" fill="#3b82f6" fontSize="8" fontWeight="bold">SHORT</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="240" cy="130" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="250" y="140" fill="#10b981" fontSize="9" fontWeight="bold">TP</text>
-    </g>
-  </svg>
-);
-
-// --- 7. SWEEP ---
-const PlayVisual_Sweep = () => (
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    <line x1="0" y1="120" x2="300" y2="120" stroke="#38bdf8" strokeWidth="1" strokeDasharray="4 2" />
-    <text x="295" y="115" fill="#38bdf8" fontSize="8" textAnchor="end" fontWeight="bold">OLD LOW / LIQ</text>
-    <path d="M20 80 L 60 100 L 100 115 L 130 135 L 150 125 L 180 80 L 250 40" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    <circle cx="130" cy="135" r="15" fill="#38bdf8" fillOpacity="0.1" stroke="#38bdf8" strokeWidth="0.5" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1.5s'}} />
-    <g className="marker-entry delay-3">
-        <circle cx="165" cy="100" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="175" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold">RECLAIM</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="250" cy="40" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="260" y="35" fill="#10b981" fontSize="9" fontWeight="bold">TP</text>
-    </g>
-  </svg>
-);
-
-// --- 8. COMPRESSION ---
-const PlayVisual_Compression = () => (
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    <line x1="20" y1="40" x2="200" y2="80" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 2" opacity="0.5" />
-    <line x1="20" y1="140" x2="200" y2="90" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 2" opacity="0.5" />
-    <path d="M20 50 L 50 130 L 90 60 L 130 110 L 160 80 L 190 95 L 220 30" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    <g className="marker-entry delay-3">
-        <circle cx="190" cy="95" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="190" y="115" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">BREAK</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="220" cy="30" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="230" y="25" fill="#10b981" fontSize="9" fontWeight="bold">EXPANSION</text>
-    </g>
-  </svg>
-);
-
-// --- 9. GAP & GO ---
-const PlayVisual_GapGo = () => (
-  <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs />
-    <rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" />
-    <rect x="20" y="100" width="40" height="40" fill="#64748b" fillOpacity="0.2" />
-    <text x="40" y="150" fill="#64748b" fontSize="8" textAnchor="middle">PRIOR RANGE</text>
-    <rect x="60" y="60" width="40" height="40" fill="url(#volGradient)" opacity="0.5" />
-    <text x="80" y="70" fill="#6366f1" fontSize="8" textAnchor="middle" fontWeight="bold">GAP</text>
-    <path d="M100 60 L 120 75 L 140 65 L 180 30 L 250 10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
-    <g className="marker-entry delay-2">
-        <circle cx="120" cy="75" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" />
-        <text x="120" y="90" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">DIP BUY</text>
-    </g>
-    <g className="marker-target delay-5">
-        <circle cx="250" cy="10" r="6" fill="none" stroke="#10b981" strokeWidth="2" />
-        <text x="240" y="20" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">GO</text>
-    </g>
-  </svg>
-);
-
+// ... (Keeping existing SVG components: PlayVisual_TrendBull, PlayVisual_TrendBear, etc. omitted for brevity but assumed present) ...
+const PlayVisual_TrendBull = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 160 L 40 140 L 40 120 L 30 100 L 30 80 L 40 60 L 40 40 L 60 20 L 60 0 L 0 0 Z" fill="url(#volGradient)" /><line x1="0" y1="90" x2="300" y2="90" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" /><text x="295" y="85" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB HIGH</text><path d="M20 120 L 60 100 L 90 110 L 140 80 L 170 90 L 250 20" fill="none" stroke="#38bdf8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-3"><circle cx="170" cy="90" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="170" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">RETEST</text></g><g className="marker-stop delay-2"><line x1="150" y1="115" x2="190" y2="115" stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="2 2" /><text x="195" y="118" fill="#f43f5e" fontSize="7" fontWeight="bold">STOP</text></g><g className="marker-target delay-5"><circle cx="250" cy="20" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="240" y="30" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">TP</text></g></svg>);
+const PlayVisual_TrendBear = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 0 L 30 20 L 30 40 L 50 60 L 50 80 L 30 100 L 30 120 L 20 140 L 20 160 L 0 160 Z" fill="url(#volGradientRed)" /><line x1="0" y1="70" x2="300" y2="70" stroke="#f97316" strokeWidth="1" strokeDasharray="4 2" opacity="0.4" /><text x="295" y="65" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">IB LOW</text><path d="M20 40 L 60 55 L 100 30 L 140 75 L 170 65 L 260 140" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-3"><circle cx="170" cy="65" r="4" fill="#f43f5e" stroke="white" strokeWidth="1.5" /><text x="170" y="55" fill="#f43f5e" fontSize="8" fontWeight="bold" textAnchor="middle">SHORT</text></g><g className="marker-stop delay-2"><line x1="150" y1="45" x2="190" y2="45" stroke="#f43f5e" strokeWidth="1.5" strokeDasharray="2 2" /><text x="195" y="48" fill="#f43f5e" fontSize="7" fontWeight="bold">STOP</text></g><g className="marker-target delay-5"><circle cx="260" cy="140" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="270" y="150" fill="#10b981" fontSize="9" fontWeight="bold">TP</text></g></svg>);
+const PlayVisual_Balance = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 140 Q 80 80, 0 20 Z" fill="url(#volGradient)" /><line x1="0" y1="30" x2="300" y2="30" stroke="#f97316" strokeWidth="1" opacity="0.4" /><text x="295" y="25" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">VAH / RES</text><line x1="0" y1="130" x2="300" y2="130" stroke="#f97316" strokeWidth="1" opacity="0.4" /><text x="295" y="145" fill="#f97316" fontSize="8" textAnchor="end" opacity="0.6" fontWeight="bold">VAL / SUP</text><path d="M30 80 L 70 120 L 100 125 L 150 40 L 180 35 L 240 120" fill="none" stroke="#a78bfa" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-2"><circle cx="100" cy="125" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="100" y="140" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">BUY FADE</text></g><g className="marker-entry delay-4"><circle cx="180" cy="35" r="4" fill="#f43f5e" stroke="white" strokeWidth="1.5" /><text x="180" y="25" fill="#f43f5e" fontSize="8" fontWeight="bold" textAnchor="middle">SELL FADE</text></g></svg>);
+const PlayVisual_WeeklyTPO = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><path d="M0 20 L 40 20 L 40 50 L 80 50 L 80 80 L 100 80 L 100 100 L 60 100 L 60 140 L 0 140 Z" fill="#6366f1" fillOpacity="0.1" stroke="#6366f1" strokeOpacity="0.2" /><line x1="0" y1="50" x2="300" y2="50" stroke="#a855f7" strokeWidth="1" strokeDasharray="4 2" /><text x="295" y="45" fill="#a855f7" fontSize="8" textAnchor="end" fontWeight="bold">WEEKLY VAH</text><line x1="0" y1="90" x2="300" y2="90" stroke="#f59e0b" strokeWidth="1.5" opacity="0.5" /><text x="110" y="85" fill="#f59e0b" fontSize="8" fontWeight="bold">COMPOSITE POC</text><path d="M200 140 L 220 110 L 210 90 L 230 88 L 220 92 L 240 50" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-3"><circle cx="230" cy="88" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="230" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">ACC/REJ</text></g><g className="marker-target delay-5"><circle cx="240" cy="50" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="250" y="45" fill="#10b981" fontSize="9" fontWeight="bold">TARGET</text></g></svg>);
+const PlayVisual_IBBreak = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><rect x="0" y="60" width="300" height="40" fill="#f97316" fillOpacity="0.05" /><line x1="0" y1="60" x2="300" y2="60" stroke="#f97316" strokeWidth="1" strokeDasharray="4 4" /><text x="295" y="55" fill="#f97316" fontSize="8" textAnchor="end" fontWeight="bold">IB HIGH</text><path d="M20 80 L 60 70 L 100 50 L 120 45 L 140 70 L 160 90" fill="none" stroke="#64748b" strokeWidth="1.5" strokeDasharray="3 3" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1s'}} /><text x="120" y="35" fill="#64748b" fontSize="8" textAnchor="middle" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1s'}}>TRAP?</text><path d="M20 80 L 60 70 L 100 50 L 130 55 L 160 30 L 220 10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-3"><circle cx="130" cy="55" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="130" y="70" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">FLIP/HOLD</text></g><g className="marker-target delay-5"><circle cx="220" cy="10" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="210" y="20" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">EXT</text></g></svg>);
+const PlayVisual_Trap = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><line x1="0" y1="60" x2="300" y2="60" stroke="#f43f5e" strokeWidth="1" strokeDasharray="4 2" /><text x="295" y="55" fill="#f43f5e" fontSize="8" textAnchor="end" fontWeight="bold">RESISTANCE / HOD</text><path d="M20 100 L 60 80 L 100 70 L 130 50 L 150 55 L 180 90 L 240 130" fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><rect x="110" y="40" width="50" height="30" fill="#f43f5e" fillOpacity="0.1" stroke="#f43f5e" strokeWidth="0.5" strokeDasharray="2 2" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 2s'}} /><text x="135" y="35" fill="#f43f5e" fontSize="8" textAnchor="middle" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 2s'}}>TRAP ZONE</text><g className="marker-entry delay-3"><circle cx="165" cy="75" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="175" y="70" fill="#3b82f6" fontSize="8" fontWeight="bold">SHORT</text></g><g className="marker-target delay-5"><circle cx="240" cy="130" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="250" y="140" fill="#10b981" fontSize="9" fontWeight="bold">TP</text></g></svg>);
+const PlayVisual_Sweep = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><line x1="0" y1="120" x2="300" y2="120" stroke="#38bdf8" strokeWidth="1" strokeDasharray="4 2" /><text x="295" y="115" fill="#38bdf8" fontSize="8" textAnchor="end" fontWeight="bold">OLD LOW / LIQ</text><path d="M20 80 L 60 100 L 100 115 L 130 135 L 150 125 L 180 80 L 250 40" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><circle cx="130" cy="135" r="15" fill="#38bdf8" fillOpacity="0.1" stroke="#38bdf8" strokeWidth="0.5" className="delay-1 fade-in" style={{opacity:0, animation: 'fadeIn 1s forwards 1.5s'}} /><g className="marker-entry delay-3"><circle cx="165" cy="100" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="175" y="105" fill="#3b82f6" fontSize="8" fontWeight="bold">RECLAIM</text></g><g className="marker-target delay-5"><circle cx="250" cy="40" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="260" y="35" fill="#10b981" fontSize="9" fontWeight="bold">TP</text></g></svg>);
+const PlayVisual_Compression = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><line x1="20" y="40" x2="200" y2="80" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 2" opacity="0.5" /><line x1="20" y1="140" x2="200" y2="90" stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 2" opacity="0.5" /><path d="M20 50 L 50 130 L 90 60 L 130 110 L 160 80 L 190 95 L 220 30" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-3"><circle cx="190" cy="95" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="190" y="115" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">BREAK</text></g><g className="marker-target delay-5"><circle cx="220" cy="30" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="230" y="25" fill="#10b981" fontSize="9" fontWeight="bold">EXPANSION</text></g></svg>);
+const PlayVisual_GapGo = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><rect x="20" y="100" width="40" height="40" fill="#64748b" fillOpacity="0.2" /><text x="40" y="150" fill="#64748b" fontSize="8" textAnchor="middle">PRIOR RANGE</text><rect x="60" y="60" width="40" height="40" fill="url(#volGradient)" opacity="0.5" /><text x="80" y="70" fill="#6366f1" fontSize="8" textAnchor="middle" fontWeight="bold">GAP</text><path d="M100 60 L 120 75 L 140 65 L 180 30 L 250 10" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" /><g className="marker-entry delay-2"><circle cx="120" cy="75" r="4" fill="#3b82f6" stroke="white" strokeWidth="1.5" /><text x="120" y="90" fill="#3b82f6" fontSize="8" fontWeight="bold" textAnchor="middle">DIP BUY</text></g><g className="marker-target delay-5"><circle cx="250" cy="10" r="6" fill="none" stroke="#10b981" strokeWidth="2" /><text x="240" y="20" fill="#10b981" fontSize="9" fontWeight="bold" textAnchor="end">GO</text></g></svg>);
 const PlayVisual_Generic = () => ( <svg viewBox="0 0 300 160" className="w-full h-full bg-slate-950/50 rounded-lg"><AnimStyles /><CommonDefs /><rect width="100%" height="100%" fill="url(#gridPattern)" opacity="0.3" /><rect x="50" y="40" width="200" height="80" fill="#1e293b" rx="8" /><path d="M70 100 L 110 80 L 150 90 L 190 50" fill="none" stroke="#10b981" strokeWidth="3" className="path-draw" /><circle cx="110" cy="80" r="5" fill="#3b82f6" className="marker-entry delay-3" /><circle cx="190" cy="50" r="5" fill="#10b981" className="marker-target delay-5" /></svg>);
+
+// --- HELPER ---
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result as string;
+      resolve(base64String.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
 
 // --- LOGIC MAPPING ---
 const getVisualForTitle = (title: string) => {
     const t = title.toLowerCase();
-    
-    // Explicit exclusions/Generic
-    if (t.includes('opening range')) return null; // No animation requested for this
-
+    if (t.includes('opening range')) return null;
     if (t.includes('weekly') || t.includes('composite')) return PlayVisual_WeeklyTPO;
     if (t.includes('ib extreme') || t.includes('break play')) return PlayVisual_IBBreak;
-
     if (t.includes('bear') || t.includes('down') || t.includes('short')) return PlayVisual_TrendBear;
-    
     if (t.includes('trend') || t.includes('drive') || t.includes('go-with')) return PlayVisual_TrendBull;
-    
-    // P-Day / Skewed Balance -> Use Balance Logic
     if (t.includes('balance') || t.includes('range') || t.includes('rotational') || t.includes('fade') || t.includes('skew') || t.includes('p-day') || t.includes('b-day')) return PlayVisual_Balance;
-    
     if (t.includes('trap') || t.includes('failed') || t.includes('fake') || t.includes('reject')) return PlayVisual_Trap; 
     if (t.includes('sweep') || t.includes('liquidity') || t.includes('stop') || t.includes('reclaim')) return PlayVisual_Sweep;
     if (t.includes('coil') || t.includes('compress') || t.includes('squeeze') || t.includes('inside')) return PlayVisual_Compression;
     if (t.includes('gap')) return PlayVisual_GapGo;
-    
     return PlayVisual_Generic;
 };
 
-// --- DATA PARSING ---
+// ... (Playbook Parsing logic remains same) ...
 const parsePlaybookMarkdown = (text: string) => {
     const sections = text.split(/^#{2,3}\s+/m).slice(1);
     return sections.map(section => {
         const lines = section.split('\n');
         const title = lines[0].trim();
         const content = lines.slice(1).join('\n').trim();
-        
-        // Extract specific fields if they exist
         const extractField = (header: string) => {
             const regex = new RegExp(`(?:\\*\\*|###)\\s*${header}.*?(?:\\n|:)(.*?)(?=(?:\\*\\*|###)|$)`, 'is');
             const match = content.match(regex);
             return match ? match[1].trim() : null;
         };
-
         const bias = extractField('Bias');
         const clues = extractField('Clues');
         const entryModel = extractField('Entry Model') || extractField('Entry');
@@ -368,20 +168,14 @@ const parsePlaybookMarkdown = (text: string) => {
         const target = extractField('Target') || extractField('Targets');
         const caution = extractField('Caution') || extractField('Risk');
         const notes = extractField('Note') || extractField('Notes');
-
         const descMatch = content.match(/^[^*-]+/);
         const desc = descMatch ? descMatch[0].replace(/\n/g, ' ').trim() : "Execution Protocol";
-
-        // If no specific fields found, fallback to generic rules extraction
         const genericRules = content.match(/^[-*]\s+(.+)$/gm)?.map(r => r.replace(/^[-*]\s+/, '').trim()) || [];
-
         return {
             id: title.toLowerCase().replace(/[^a-z0-9]/g, '-'),
             title,
             desc,
-            structured: {
-                bias, clues, entryModel, stop, target, caution, notes
-            },
+            structured: { bias, clues, entryModel, stop, target, caution, notes },
             genericRules,
             visual: getVisualForTitle(title)
         };
@@ -406,7 +200,6 @@ const PlaybookCard = ({ item, onClick }: { item: any, onClick: () => void }) => 
                 <FileText className="w-8 h-8 opacity-20" />
             </div>
         )}
-        
         <div className="flex items-start justify-between mb-2">
             <h3 className="text-sm font-black uppercase text-slate-200 group-hover:text-indigo-400 transition-colors line-clamp-2">{item.title}</h3>
             {item.structured.bias && (
@@ -415,11 +208,7 @@ const PlaybookCard = ({ item, onClick }: { item: any, onClick: () => void }) => 
                 </span>
             )}
         </div>
-        
-        <p className="text-xs text-slate-400 leading-relaxed font-medium flex-1 line-clamp-3 mb-4">
-            {item.structured.clues || item.desc}
-        </p>
-        
+        <p className="text-xs text-slate-400 leading-relaxed font-medium flex-1 line-clamp-3 mb-4">{item.structured.clues || item.desc}</p>
         <div className="mt-auto pt-3 border-t border-slate-800 flex items-center gap-2 text-[10px] font-mono font-bold text-slate-500 group-hover:text-slate-300">
             <PlayCircle className="w-3 h-3 text-indigo-500" /><span>View Execution Rules</span>
             <ArrowRight className="w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity transform -translate-x-2 group-hover:translate-x-0 text-indigo-400" />
@@ -428,7 +217,7 @@ const PlaybookCard = ({ item, onClick }: { item: any, onClick: () => void }) => 
   );
 };
 
-// --- BACKTEST LOGIC (Unchanged from previous robust version) ---
+// ... (Backtest functions runBacktest, extractLevels, etc. assumed present) ...
 const extractLevels = (text: string) => {
     const extract = (str: string, pattern: RegExp) => {
         const match = str.match(pattern);
@@ -438,34 +227,28 @@ const extractLevels = (text: string) => {
         }
         return null;
     };
-
     const parseBlock = (block: string) => ({
         entry: extract(block, /Entry Zone:\*\*.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Entry Zone:\*\*.*?([\d,.]+)/i),
         stop: extract(block, /Risk Exit.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Risk Exit.*?:.*?([\d,.]+)/i) || extract(block, /Stop.*?:.*?([\d,.]+)/i),
         tp1: extract(block, /Target 1.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Target 1.*?:.*?([\d,.]+)/i),
         tp2: extract(block, /Target 2.*?[\[\(]([\d,.]+)[\]\)]/i) || extract(block, /Target 2.*?:.*?([\d,.]+)/i)
     });
-
     let primary = null;
     let hedge = null;
-
     if (text.includes('🥇 PRIMARY SETUP')) {
         const block = text.split('🥇 PRIMARY SETUP')[1].split('##')[0];
         const data = parseBlock(block);
         if (data.entry && (data.stop || data.tp1)) primary = data;
     }
-
     if (text.includes('🥈 HEDGE SETUP')) {
         const block = text.split('🥈 HEDGE SETUP')[1].split('##')[0];
         const data = parseBlock(block);
         if (data.entry && (data.stop || data.tp1)) hedge = data;
     }
-
     if (!primary) {
         const data = parseBlock(text);
         if (data.entry && data.stop) primary = data;
     }
-
     return { primary, hedge };
 };
 
@@ -483,18 +266,14 @@ interface SimResult {
 
 const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
     if (!setup || !futureSnapshots.length) return null;
-    
     const { entry, stop, tp1 } = setup;
     if (!entry || !stop || !tp1) return null;
-
     const isLong = tp1 > entry;
     const initialRisk = Math.abs(entry - stop);
     const safeRisk = initialRisk < 0.25 ? 1 : initialRisk;
-
     let fixed = { status: 'PENDING', result: 'NEUTRAL', exitPrice: 0, exitTime: '', entryTime: '', maxFavorable: 0, realizedPnL: 0, realizedRR: 0 };
     let smart = { status: 'PENDING', result: 'NEUTRAL', exitPrice: 0, exitTime: '', entryTime: '', maxFavorable: 0, realizedPnL: 0, realizedRR: 0, stopPrice: stop, beTriggered: false };
     let trail = { status: 'PENDING', result: 'NEUTRAL', exitPrice: 0, exitTime: '', entryTime: '', maxFavorable: 0, realizedPnL: 0, realizedRR: 0, stopPrice: stop, current5mHigh: -Infinity, current5mLow: Infinity, last5mPeriod: '' };
-
     const finalize = (state: any, exitP: number, time: string, reason: string) => {
         state.status = 'CLOSED';
         state.exitPrice = exitP;
@@ -504,31 +283,15 @@ const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
         state.realizedPnL = isLong ? diff : -diff;
         state.realizedRR = state.realizedPnL / safeRisk;
     };
-
     for (const snap of futureSnapshots) {
         const price = snap.input.intraday.ib.current_close;
         const time = snap.input.current_et_time;
         const [hh, mm] = time.split(':').map(Number);
-        
-        const periodIndex = Math.floor(mm / 5);
-        const current5mPeriod = `${hh}:${periodIndex}`;
-
-        const entryTriggered = (fixed.status === 'PENDING') && (
-            (isLong && price <= entry * 1.0005 && price >= entry * 0.9995) || 
-            (isLong && price < entry) || 
-            (!isLong && price >= entry * 0.9995 && price <= entry * 1.0005) ||
-            (!isLong && price > entry)
-        );
-
+        const current5mPeriod = `${hh}:${Math.floor(mm / 5)}`;
+        const entryTriggered = (fixed.status === 'PENDING') && ((isLong && price <= entry * 1.0005 && price >= entry * 0.9995) || (isLong && price < entry) || (!isLong && price >= entry * 0.9995 && price <= entry * 1.0005) || (!isLong && price > entry));
         if (entryTriggered) {
-            [fixed, smart, trail].forEach(s => {
-                if (s.status === 'PENDING') {
-                    s.status = 'OPEN';
-                    s.entryTime = time;
-                }
-            });
+            [fixed, smart, trail].forEach(s => { if (s.status === 'PENDING') { s.status = 'OPEN'; s.entryTime = time; } });
         }
-
         if (fixed.status === 'OPEN') {
             const diff = price - entry;
             const curPnL = isLong ? diff : -diff;
@@ -536,86 +299,32 @@ const runBacktest = (setup: any, futureSnapshots: MarketSnapshot[]) => {
             smart.maxFavorable = Math.max(smart.maxFavorable, curPnL);
             trail.maxFavorable = Math.max(trail.maxFavorable, curPnL);
         }
-
         if (fixed.status === 'OPEN') {
-            if ((isLong && price <= stop) || (!isLong && price >= stop)) {
-                finalize(fixed, stop, time, 'LOSS');
-            } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
-                finalize(fixed, tp1, time, 'WIN (TP1)');
-            }
+            if ((isLong && price <= stop) || (!isLong && price >= stop)) { finalize(fixed, stop, time, 'LOSS'); } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) { finalize(fixed, tp1, time, 'WIN (TP1)'); }
         }
-
         if (smart.status === 'OPEN') {
-            if ((isLong && price <= smart.stopPrice) || (!isLong && price >= smart.stopPrice)) {
-                const res = Math.abs(smart.stopPrice - entry) < 0.5 ? 'BE (SCRATCH)' : 'LOSS';
-                finalize(smart, smart.stopPrice, time, res);
-            } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
-                finalize(smart, tp1, time, 'WIN (TP1)');
-            } else if (!smart.beTriggered) {
-                const currentProfit = isLong ? price - entry : entry - price;
-                if (currentProfit > 4.0) {
-                    smart.stopPrice = entry;
-                    smart.beTriggered = true;
-                }
-            }
+            if ((isLong && price <= smart.stopPrice) || (!isLong && price >= smart.stopPrice)) { const res = Math.abs(smart.stopPrice - entry) < 0.5 ? 'BE (SCRATCH)' : 'LOSS'; finalize(smart, smart.stopPrice, time, res); } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) { finalize(smart, tp1, time, 'WIN (TP1)'); } else if (!smart.beTriggered) { const currentProfit = isLong ? price - entry : entry - price; if (currentProfit > 4.0) { smart.stopPrice = entry; smart.beTriggered = true; } }
         }
-
         if (trail.status === 'OPEN') {
             trail.current5mHigh = Math.max(trail.current5mHigh, price);
             trail.current5mLow = Math.min(trail.current5mLow, price);
-
-            if ((isLong && price <= trail.stopPrice) || (!isLong && price >= trail.stopPrice)) {
-                const pnl = isLong ? trail.stopPrice - entry : entry - trail.stopPrice;
-                const label = pnl > 0 ? 'TRAIL WIN' : pnl > -0.5 && pnl < 0.5 ? 'TRAIL BE' : 'TRAIL LOSS';
-                finalize(trail, trail.stopPrice, time, label);
-            } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) {
-                finalize(trail, tp1, time, 'WIN (TP1)');
-            }
-            
-            if (trail.last5mPeriod && trail.last5mPeriod !== current5mPeriod) {
-                if (isLong) {
-                    if (trail.current5mLow > trail.stopPrice) trail.stopPrice = trail.current5mLow;
-                } else {
-                    if (trail.current5mHigh < trail.stopPrice) trail.stopPrice = trail.current5mHigh;
-                }
-                trail.current5mHigh = -Infinity;
-                trail.current5mLow = Infinity;
-            }
-            trail.last5mPeriod = current5mPeriod;
+            if ((isLong && price <= trail.stopPrice) || (!isLong && price >= trail.stopPrice)) { const pnl = isLong ? trail.stopPrice - entry : entry - trail.stopPrice; const label = pnl > 0 ? 'TRAIL WIN' : pnl > -0.5 && pnl < 0.5 ? 'TRAIL BE' : 'TRAIL LOSS'; finalize(trail, trail.stopPrice, time, label); } else if ((isLong && price >= tp1) || (!isLong && price <= tp1)) { finalize(trail, tp1, time, 'WIN (TP1)'); }
+            if (trail.last5mPeriod && trail.last5mPeriod !== current5mPeriod) { if (isLong) { if (trail.current5mLow > trail.stopPrice) trail.stopPrice = trail.current5mLow; } else { if (trail.current5mHigh < trail.stopPrice) trail.stopPrice = trail.current5mHigh; } trail.current5mHigh = -Infinity; trail.current5mLow = Infinity; } trail.last5mPeriod = current5mPeriod;
         }
-
         if (fixed.status === 'CLOSED' && smart.status === 'CLOSED' && trail.status === 'CLOSED') break;
     }
-
     const eodPrice = futureSnapshots[futureSnapshots.length - 1].input.intraday.ib.current_close;
     const eodTime = futureSnapshots[futureSnapshots.length - 1].input.current_et_time;
-
-    [fixed, smart, trail].forEach(s => {
-        if (s.status === 'OPEN') {
-            const diff = eodPrice - entry;
-            const finalPnL = isLong ? diff : -diff;
-            finalize(s, eodPrice, eodTime, finalPnL > 0 ? 'OPEN (PROFIT)' : 'OPEN (DRAWDOWN)');
-        }
-    });
-
+    [fixed, smart, trail].forEach(s => { if (s.status === 'OPEN') { const diff = eodPrice - entry; const finalPnL = isLong ? diff : -diff; finalize(s, eodPrice, eodTime, finalPnL > 0 ? 'OPEN (PROFIT)' : 'OPEN (DRAWDOWN)'); } });
     return { fixed: fixed as SimResult, smart: smart as SimResult, trail: trail as SimResult, direction: isLong ? 'LONG' : 'SHORT', entryPrice: entry };
 };
 
 const StrategyComparisonRow = ({ label, data, icon: Icon }: any) => (
     <div className="grid grid-cols-4 gap-2 items-center text-[10px] font-mono border-b border-slate-800/50 pb-2 last:border-0 last:pb-0">
-        <div className="col-span-1 flex items-center gap-1.5 text-slate-400 font-bold uppercase">
-            <Icon className="w-3 h-3 opacity-70" />
-            {label}
-        </div>
-        <div className={`col-span-1 font-black ${data.result.includes('WIN') || data.result.includes('PROFIT') ? 'text-emerald-400' : data.result.includes('BE') ? 'text-amber-400' : 'text-rose-400'}`}>
-            {data.result}
-        </div>
-        <div className="col-span-1 text-right text-slate-300">
-            {data.realizedPnL > 0 ? '+' : ''}{data.realizedPnL.toFixed(2)} pts
-        </div>
-        <div className="col-span-1 text-right font-black text-indigo-300">
-            {data.realizedRR.toFixed(2)}R
-        </div>
+        <div className="col-span-1 flex items-center gap-1.5 text-slate-400 font-bold uppercase"><Icon className="w-3 h-3 opacity-70" />{label}</div>
+        <div className={`col-span-1 font-black ${data.result.includes('WIN') || data.result.includes('PROFIT') ? 'text-emerald-400' : data.result.includes('BE') ? 'text-amber-400' : 'text-rose-400'}`}>{data.result}</div>
+        <div className="col-span-1 text-right text-slate-300">{data.realizedPnL > 0 ? '+' : ''}{data.realizedPnL.toFixed(2)} pts</div>
+        <div className="col-span-1 text-right font-black text-indigo-300">{data.realizedRR.toFixed(2)}R</div>
     </div>
 );
 
@@ -645,31 +354,33 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [lastContext, setLastContext] = useState<string>('');
 
-  useEffect(() => {
-    const fetchPlaybook = async () => {
-        setPlaybookStatus('loading');
-        try {
-            const res = await fetch(`${PLAYBOOK_URL}?cb=${Date.now()}`);
-            if (res.ok) {
-                const text = await res.text();
-                if (text.length > 50) {
-                    setPlaybookSource(text);
-                    const parsedItems = parsePlaybookMarkdown(text);
-                    setPlaybookItems(parsedItems);
-                    setPlaybookStatus('active');
-                } else {
-                    console.warn("Playbook file empty or too short");
-                    setPlaybookStatus('error');
-                }
+  // Image Upload State
+  const [userImage, setUserImage] = useState<{ data: string, mimeType: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchPlaybook = async () => {
+    setPlaybookStatus('loading');
+    try {
+        const res = await fetch(`${PLAYBOOK_URL}?cb=${Date.now()}`);
+        if (res.ok) {
+            const text = await res.text();
+            if (text.length > 50) {
+                setPlaybookSource(text);
+                const parsedItems = parsePlaybookMarkdown(text);
+                setPlaybookItems(parsedItems);
+                setPlaybookStatus('active');
             } else {
-                console.warn(`Playbook fetch failed: ${res.status}`);
                 setPlaybookStatus('error');
             }
-        } catch (e) {
-            console.warn("Playbook fetch failed, network error:", e);
+        } else {
             setPlaybookStatus('error');
         }
-    };
+    } catch (e) {
+        setPlaybookStatus('error');
+    }
+  };
+
+  useEffect(() => {
     fetchPlaybook();
   }, []);
 
@@ -688,6 +399,19 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
         .filter(s => s.input.current_et_time <= currentTime)
         .sort((a, b) => a.input.current_et_time.localeCompare(b.input.current_et_time));
   }, [snapshots, currentSnapshot]);
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        try {
+            const base64 = await blobToBase64(file);
+            setUserImage({ data: base64, mimeType: file.type });
+        } catch (err) {
+            console.error("Image load failed", err);
+        }
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const generateTradeIdeas = async () => {
     if (!historyPointInTime || historyPointInTime.length === 0) {
@@ -729,7 +453,7 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
 
         ==================================================================================
         PART 1: THE PLAYBOOK (STRATEGIC RULES)
-        ${playbookSource ? playbookSource : "NO PLAYBOOK FOUND. RELY ON STANDARD AUCTION THEORY."}
+        ${playbookSource ? playbookSource : "CRITICAL WARNING: NO PLAYBOOK SOURCE LOADED. RELY ON STANDARD AUCTION THEORY AND TPO STRUCTURE."}
         ==================================================================================
 
         PART 2: TPO & PROFILE STRUCTURE (THE MAP)
@@ -754,8 +478,10 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
         ${psychContent || "No Psychology Protocol Loaded."}
         ==================================================================================
 
+        ${userImage ? "USER HAS PROVIDED A VISUAL CHART CONTEXT (ATTACHED IMAGE). INTEGRATE THIS VISUAL INTO YOUR ANALYSIS." : ""}
+
         TASK:
-        Based on the "Playbook" rules and the "Full Session Telemetry", generate the Daily Trade Plan.
+        Based on the "Playbook" rules (specifically reference the Playbook entry names if applicable, e.g. "Trend Day", "Balance Fade") and the "Full Session Telemetry", generate the Daily Trade Plan.
         
         REQUIREMENTS:
         1. Compare the Bullish vs. Bearish Case.
@@ -770,7 +496,7 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
         - **The "Why":** (Synthesize context)
 
         ## 🥇 PRIMARY SETUP (Highest Likelihood)
-        - **Playbook Play:** (Name of play)
+        - **Playbook Play:** (Name of play found in Playbook)
         - **Trigger Condition:** (Specific event)
         - **Entry Zone:** [Price]
         - **Risk Exit (Stop):** [Price]
@@ -779,7 +505,7 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
         - **⚠️ Caution:** (Risk factors)
 
         ## 🥈 HEDGE SETUP (Counter-Trend)
-        - **Playbook Play:** (Name of play)
+        - **Playbook Play:** (Name of play found in Playbook)
         - **Logic:** (Reversal condition)
         - **Entry Zone:** [Price]
         - **Risk Exit (Stop):** [Price]
@@ -795,13 +521,25 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
       setLastContext(prompt);
 
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Stream response logic needs to accumulate text to then parse for backtest
       let fullText = "";
+      
+      const contents = [];
+      const parts: any[] = [{ text: prompt }];
+      
+      // Attach image if present
+      if (userImage) {
+          parts.push({
+              inlineData: {
+                  mimeType: userImage.mimeType,
+                  data: userImage.data
+              }
+          });
+      }
+      contents.push({ role: 'user', parts });
+
       const responseStream = await ai.models.generateContentStream({
         model: 'gemini-3-flash-preview',
-        contents: [
-            { role: 'user', parts: [{ text: prompt }] }
-        ],
+        contents: contents,
         config: {
             temperature: 0.4,
         }
@@ -882,6 +620,9 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
   return (
     <div className="h-full flex flex-col bg-slate-900/40 border border-slate-800 rounded-[2rem] overflow-hidden shadow-2xl relative">
        <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#f59e0b 1px, transparent 1px), linear-gradient(90deg, #f59e0b 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+      
+      {/* Hidden Upload Input */}
+      <input type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" className="hidden" />
 
       {/* Header */}
       <div className="p-6 border-b border-slate-800 bg-slate-900/60 shrink-0 flex items-center justify-between relative z-10">
@@ -897,7 +638,14 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
                      </span>
                      {playbookStatus === 'loading' && <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-500 font-bold animate-pulse whitespace-nowrap"><Loader2 className="w-3 h-3 animate-spin" /> Linking Playbook...</span>}
                      {playbookStatus === 'active' && <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-mono text-emerald-400 font-bold whitespace-nowrap"><Link2 className="w-3 h-3" /> Playbook Linked</span>}
-                     {playbookStatus === 'error' && <span title={`Failed to fetch: ${PLAYBOOK_URL}`} className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] font-mono text-rose-400 font-bold cursor-help whitespace-nowrap"><Unlink className="w-3 h-3" /> Playbook Unlinked</span>}
+                     {playbookStatus === 'error' && (
+                        <div className="flex items-center gap-2">
+                            <span title={`Failed to fetch: ${PLAYBOOK_URL}`} className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 border border-rose-500/20 text-[10px] font-mono text-rose-400 font-bold cursor-help whitespace-nowrap"><Unlink className="w-3 h-3" /> Playbook Unlinked</span>
+                            <button onClick={fetchPlaybook} className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors border border-slate-700" title="Retry Connection">
+                                <RefreshCw className="w-3 h-3" />
+                            </button>
+                        </div>
+                     )}
                      
                      <button onClick={() => setShowPlaybookLibrary(true)} className="ml-2 p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors border border-indigo-500/30" title="Open Playbook Library">
                          <BookOpen className="w-3.5 h-3.5" />
@@ -906,6 +654,29 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
             </div>
         </div>
         <div className="flex items-center gap-3 shrink-0 ml-4">
+            {/* Image Upload Button */}
+            {!loading && (
+                <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all ${
+                        userImage 
+                            ? 'bg-sky-500/20 border-sky-500/50 text-sky-300' 
+                            : 'bg-slate-950/50 border-slate-800 text-slate-500 hover:text-slate-300 hover:bg-slate-900'
+                    }`}
+                    title={userImage ? "Chart Attached" : "Upload Chart Screenshot"}
+                >
+                    {userImage ? <ImagePlus className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                    <span className="text-[10px] font-black uppercase tracking-widest hidden xl:inline">
+                        {userImage ? "Chart Ready" : "Add Chart"}
+                    </span>
+                    {userImage && (
+                        <span onClick={(e) => { e.stopPropagation(); setUserImage(null); }} className="ml-1 p-1 hover:bg-sky-500/20 rounded-full">
+                            <X className="w-3 h-3" />
+                        </span>
+                    )}
+                </button>
+            )}
+
             {/* Backtest Toggle */}
             {!loading && (
                 <button 

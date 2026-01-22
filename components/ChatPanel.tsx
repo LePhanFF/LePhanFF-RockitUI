@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
-import { Send, X, MessageSquare, Bot, User, Loader2, Sparkles, Copy, Check, Mic, MicOff, Volume2, Camera, CameraOff, Eye, Activity, ShieldCheck } from 'lucide-react';
+import { Send, X, MessageSquare, Bot, User, Loader2, Sparkles, Copy, Check, Mic, MicOff, Volume2, Camera, CameraOff, Eye, Activity, ShieldCheck, Paperclip, Image as ImageIcon, Trash2 } from 'lucide-react';
 
 interface ChatPanelProps {
   isOpen: boolean;
@@ -13,7 +14,9 @@ interface ChatPanelProps {
 interface Message {
   role: 'user' | 'model';
   text: string;
+  image?: string; // Base64 string for display
   isStreaming?: boolean;
+  timestamp: string;
 }
 
 // Ensure this matches the requested URL exactly
@@ -85,14 +88,25 @@ async function blobToBase64(blob: Blob): Promise<string> {
 const smartTruncate = (text: string, maxLength: number) => {
     if (!text || text.length <= maxLength) return text;
     const half = Math.floor(maxLength / 2);
-    return text.substring(0, half) + "\n... [DATA TRUNCATED] ...\n" + text.substring(text.length - half);
+    // Prioritize the end of the string where recent data usually lives, but keep headers
+    return text.substring(0, half * 0.2) + "\n... [DATA TRUNCATED] ...\n" + text.substring(text.length - (half * 1.8));
 };
+
+const getCurrentTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextData, initialReport }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [copied, setCopied] = useState(false);
+  
+  // Image Upload State
+  const [pendingImage, setPendingImage] = useState<{ data: string, mimeType: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // State for individual message copy feedback
+  const [copiedMessageId, setCopiedMessageId] = useState<number | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   
   // Chat Session Reference (Text)
@@ -115,7 +129,6 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
   const audioSources = useRef<Set<AudioBufferSourceNode>>(new Set());
   
   // Video Refs
-  // IMPORTANT: We use a hidden video element to capture the stream for the canvas
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoIntervalRef = useRef<number | null>(null);
@@ -135,11 +148,19 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
     if (initialReport && contextData && isOpen && !chatSession.current) {
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const truncatedContext = smartTruncate(contextData, 25000);
+            const truncatedContext = smartTruncate(contextData, 100000); // Expanded context window
             const systemInstruction = `
                 You are an expert trading assistant.
-                PRIOR CONTEXT: ${truncatedContext}
-                ACTIVE REPORT: ${initialReport}
+                
+                IMPORTANT: The user is looking at a specific report titled "ACTIVE REPORT" below.
+                Your responses MUST align with the bias and analysis in that report. Do not contradict it.
+                
+                ACTIVE REPORT:
+                ${initialReport}
+
+                PRIOR CONTEXT (Data):
+                ${truncatedContext}
+                
                 INSTRUCTIONS: Answer specific follow-up questions. Be concise.
             `;
 
@@ -151,13 +172,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                 }
             });
 
-            setMessages([{ role: 'model', text: "I'm ready to discuss the analysis. What's on your mind?" }]);
+            setMessages([{ role: 'model', text: "I'm ready to discuss the analysis. What's on your mind?", timestamp: getCurrentTime() }]);
         } catch (e) {
             console.error("Chat Init Error", e);
-            setMessages([{ role: 'model', text: "System Error: Could not initialize chat context." }]);
+            setMessages([{ role: 'model', text: "System Error: Could not initialize chat context.", timestamp: getCurrentTime() }]);
         }
     } else if (isOpen && chatSession.current && messages.length === 0) {
-         setMessages([{ role: 'model', text: "I'm ready to discuss the analysis. What's on your mind?" }]);
+         setMessages([{ role: 'model', text: "I'm ready to discuss the analysis. What's on your mind?", timestamp: getCurrentTime() }]);
     }
   }, [initialReport, contextData, isOpen]);
 
@@ -165,7 +186,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
     if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isOpen, isTyping]);
+  }, [messages, isOpen, isTyping, pendingImage]);
 
   // Clean up when panel closes
   useEffect(() => {
@@ -177,28 +198,89 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
       };
   }, [isOpen]);
 
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        try {
+            const base64 = await blobToBase64(file);
+            setPendingImage({ data: base64, mimeType: file.type });
+        } catch (err) {
+            console.error("Image load failed", err);
+        }
+    }
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+            e.preventDefault();
+            const blob = items[i].getAsFile();
+            if (blob) {
+                const base64 = await blobToBase64(blob);
+                setPendingImage({ data: base64, mimeType: blob.type });
+            }
+            return;
+        }
+    }
+  };
+
   const handleSend = async () => {
-    if (!input.trim() || !chatSession.current) return;
-    const userMsg = input;
+    if ((!input.trim() && !pendingImage) || !chatSession.current) return;
+    
+    const userText = input;
+    const currentImage = pendingImage; // Capture reference
+    
+    // Clear Input
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+    setPendingImage(null);
+
+    // Optimistic Update
+    setMessages(prev => [...prev, { 
+        role: 'user', 
+        text: userText, 
+        image: currentImage ? `data:${currentImage.mimeType};base64,${currentImage.data}` : undefined,
+        timestamp: getCurrentTime() 
+    }]);
+    
     setIsTyping(true);
+    
     try {
-        const result = await chatSession.current.sendMessage({ message: userMsg });
-        setMessages(prev => [...prev, { role: 'model', text: result.text }]);
+        let result;
+        if (currentImage) {
+            // Multimodal Send
+            const parts: any[] = [];
+            if (userText) parts.push({ text: userText });
+            parts.push({ inlineData: { mimeType: currentImage.mimeType, data: currentImage.data } });
+            
+            result = await chatSession.current.sendMessage({ message: parts });
+        } else {
+            // Text Only Send
+            result = await chatSession.current.sendMessage({ message: userText });
+        }
+        
+        setMessages(prev => [...prev, { role: 'model', text: result.text, timestamp: getCurrentTime() }]);
     } catch (e) {
         console.error("Chat Error", e);
-        setMessages(prev => [...prev, { role: 'model', text: "Connection error. Please try again." }]);
+        setMessages(prev => [...prev, { role: 'model', text: "Connection error. Please try again.", timestamp: getCurrentTime() }]);
     } finally {
         setIsTyping(false);
     }
   };
 
   const handleCopyChat = () => {
-      const text = messages.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n\n');
+      const text = messages.map(m => `[${m.timestamp}] ${m.role.toUpperCase()}: ${m.text}`).join('\n\n');
       navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyMessage = (text: string, index: number) => {
+      navigator.clipboard.writeText(text);
+      setCopiedMessageId(index);
+      setTimeout(() => setCopiedMessageId(null), 2000);
   };
 
   const stopLiveSession = async () => {
@@ -299,12 +381,23 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
 
           // --- 3. Prepare Prompt ---
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const truncatedVoiceContext = smartTruncate(contextData, 8000);
+          // Increased context limit to prevent data loss that causes hallucinations
+          const truncatedVoiceContext = smartTruncate(contextData, 100000); // Expanded context window
 
           const standardPrompt = `
                 You are a trading assistant participating in a verbal debrief.
-                CONTEXT: ${truncatedVoiceContext}
-                CURRENT REPORT: ${initialReport}
+                
+                CRITICAL INSTRUCTION:
+                You must strictly adhere to the market analysis provided in the "CURRENT REPORT" below.
+                The user has this report open. If the report says "Failed Trend" or "Balance", do NOT say we are "Trending".
+                Your job is to vocalize and expand on the report, not re-analyze from scratch.
+
+                CURRENT REPORT (GROUND TRUTH):
+                ${initialReport}
+
+                SUPPORTING CONTEXT (DATA):
+                ${truncatedVoiceContext}
+                
                 Answer their questions specifically regarding the session.
           `;
 
@@ -321,6 +414,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                 2. AGGRESSIVE INTERVENTION: If you see signs of distress (hands on face, rubbing eyes, slamming desk, angry expression), STOP the user immediately.
                 3. VERBAL CONFIRMATION: Periodically confirm you are watching (e.g., "Scanning... posture looks okay." or "I see movement.").
                 
+                ALIGNMENT:
+                Refer to the CURRENT REPORT for market context. Do not hallucinate a different market state.
+                CURRENT REPORT: ${initialReport}
+
                 CONTEXT: ${truncatedVoiceContext}
           `;
 
@@ -334,7 +431,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                       setIsLiveConnecting(false);
                       setMessages(prev => [...prev, { 
                           role: 'model', 
-                          text: useVideo ? "👁️ STEALTH MODE ACTIVE. Video feed encrypted. I am watching for tilt..." : "🔴 Voice Link Established." 
+                          text: useVideo ? "👁️ STEALTH MODE ACTIVE. Video feed encrypted. I am watching for tilt..." : "🔴 Voice Link Established.",
+                          timestamp: getCurrentTime()
                       }]);
 
                       // Audio Input Handling
@@ -409,7 +507,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                       
                       // Text Transcription
                       if (serverContent?.turnComplete && serverContent?.modelTurn?.parts?.[0]?.text) {
-                           setMessages(prev => [...prev, { role: 'model', text: serverContent.modelTurn.parts[0].text }]);
+                           setMessages(prev => [...prev, { role: 'model', text: serverContent.modelTurn.parts[0].text, timestamp: getCurrentTime() }]);
                       }
                   },
                   onclose: () => { 
@@ -419,7 +517,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                   onerror: (e) => {
                       console.error("Live Error", e);
                       stopLiveSession();
-                      setMessages(prev => [...prev, { role: 'model', text: "⚠️ Connection Interrupted." }]);
+                      setMessages(prev => [...prev, { role: 'model', text: "⚠️ Connection Interrupted.", timestamp: getCurrentTime() }]);
                   }
               },
               config: {
@@ -437,7 +535,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
           if (e.name === 'NotAllowedError') errorMsg = "Microphone/Camera access denied.";
           else if (e.name === 'NotFoundError') errorMsg = "Device not found.";
           else if (e.name === 'NotReadableError' || (e.message && e.message.includes('Device in use'))) errorMsg = "Device in use. Close other apps.";
-          setMessages(prev => [...prev, { role: 'model', text: `⚠️ ${errorMsg}` }]);
+          setMessages(prev => [...prev, { role: 'model', text: `⚠️ ${errorMsg}`, timestamp: getCurrentTime() }]);
       }
   };
 
@@ -466,6 +564,15 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
         {/* Hidden video element for stream capture */}
         <video ref={videoRef} className="hidden" muted playsInline />
         <canvas ref={canvasRef} className="hidden" />
+        
+        {/* Hidden File Input */}
+        <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileSelect} 
+            accept="image/*" 
+            className="hidden" 
+        />
 
         <div className="fixed top-24 left-4 bottom-4 w-[480px] max-w-[90vw] bg-slate-950 border border-slate-700/50 shadow-[0_0_50px_rgba(0,0,0,0.5)] z-[160] rounded-2xl flex flex-col animate-in slide-in-from-left duration-300">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/80 rounded-t-2xl backdrop-blur-md">
@@ -517,7 +624,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                         {isLiveConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : !isVideoActive && isLive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                     </button>
                     
-                    <button onClick={handleCopyChat} className={`p-2 rounded-lg border transition-all ${copied ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700'}`}>
+                    <button onClick={handleCopyChat} className={`p-2 rounded-lg border transition-all ${copied ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700'}`} title="Copy Full Chat Log">
                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
                     
@@ -570,8 +677,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                         <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border shadow-lg ${m.role === 'user' ? 'bg-slate-800 border-slate-700' : 'bg-indigo-600 border-indigo-500'}`}>
                             {m.role === 'user' ? <User className="w-4 h-4 text-slate-300" /> : <Bot className="w-4 h-4 text-white" />}
                         </div>
-                        <div className={`max-w-[85%] rounded-2xl p-4 text-sm leading-relaxed font-medium shadow-inner ${m.role === 'user' ? 'bg-slate-800 text-slate-200 rounded-tr-none border border-slate-700' : 'bg-indigo-500/10 border border-indigo-500/20 text-slate-100 rounded-tl-none'}`}>
-                            {m.text}
+                        <div className={`max-w-[85%] rounded-2xl p-3 text-sm leading-relaxed font-medium shadow-inner flex flex-col gap-1 ${m.role === 'user' ? 'bg-slate-800 text-slate-200 rounded-tr-none border border-slate-700' : 'bg-indigo-500/10 border border-indigo-500/20 text-slate-100 rounded-tl-none'}`}>
+                            {/* Message Header */}
+                            <div className={`flex items-center gap-2 border-b border-white/5 pb-1 mb-1 opacity-60 ${m.role === 'user' ? 'justify-end' : 'justify-between'}`}>
+                                {m.role === 'model' && <span className="text-[10px] font-mono font-bold tracking-tight">{m.timestamp}</span>}
+                                
+                                <div className="flex items-center gap-2">
+                                    {m.role === 'user' && <span className="text-[10px] font-mono font-bold tracking-tight">{m.timestamp}</span>}
+                                    <button 
+                                        onClick={() => handleCopyMessage(m.text, i)} 
+                                        className={`hover:text-white transition-colors ${copiedMessageId === i ? 'text-emerald-400' : 'text-current'}`}
+                                        title="Copy message"
+                                    >
+                                        {copiedMessageId === i ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Attached Image (if any) */}
+                            {m.image && (
+                                <div className="mb-2 rounded-lg overflow-hidden border border-white/10">
+                                    <img src={m.image} alt="User upload" className="max-w-full max-h-48 object-cover" />
+                                </div>
+                            )}
+
+                            {/* Message Body */}
+                            <div>{m.text}</div>
                         </div>
                     </div>
                 ))}
@@ -591,19 +722,44 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
             </div>
 
             <div className="p-4 border-t border-slate-800 bg-slate-900/50 rounded-b-2xl">
+                {/* Image Preview Stage */}
+                {pendingImage && (
+                    <div className="mb-3 flex items-start gap-2 bg-slate-950 p-2 rounded-xl border border-indigo-500/30">
+                        <div className="relative group">
+                            <img src={`data:${pendingImage.mimeType};base64,${pendingImage.data}`} className="h-16 w-16 object-cover rounded-lg border border-slate-700" alt="Preview" />
+                            <button onClick={() => setPendingImage(null)} className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 shadow-lg hover:bg-rose-600">
+                                <X className="w-3 h-3" />
+                            </button>
+                        </div>
+                        <div className="flex-1">
+                            <span className="text-[10px] text-indigo-300 font-bold uppercase block">Image Staged</span>
+                            <span className="text-[9px] text-slate-500">Will be sent with next message</span>
+                        </div>
+                    </div>
+                )}
+
                 <div className="relative">
+                    <button 
+                        className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-colors"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Attach Image"
+                    >
+                        <Paperclip className="w-4 h-4" />
+                    </button>
+
                     <input 
                         type="text" 
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                        placeholder={isLive ? "Listening mode active..." : "Ask a follow-up question..."}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-4 pr-12 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors shadow-inner placeholder:text-slate-600"
+                        onPaste={handlePaste}
+                        placeholder={isLive ? "Listening mode active..." : "Ask follow-up (Paste image supported)..."}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-10 pr-12 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors shadow-inner placeholder:text-slate-600"
                         disabled={isTyping || isLive} 
                     />
                     <button 
                         onClick={handleSend}
-                        disabled={!input.trim() || isTyping || isLive}
+                        disabled={(!input.trim() && !pendingImage) || isTyping || isLive}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-lg transition-colors shadow-lg"
                     >
                         {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

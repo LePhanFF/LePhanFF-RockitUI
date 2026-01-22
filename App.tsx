@@ -343,17 +343,53 @@ const App: React.FC = () => {
 
   const currentSnapshot = processedSnapshots[selectedIndex] || null;
 
-  // Simple Global Chat Context
+  // --- GLOBAL CONTEXT FOR AI ASSISTANT ---
   const globalContext = useMemo(() => {
     if (!currentSnapshot || processedSnapshots.length === 0) return '';
+
+    const currentTime = currentSnapshot.input.current_et_time;
+    
+    // Create a chronological log of the FULL session up to the current timestamp
+    // Removed .slice(-30) to allow full context visibility
+    const sessionLog = processedSnapshots
+      .filter(s => s.input.current_et_time <= currentTime)
+      .map(s => {
+          const bias = s.decoded?.bias || 'NEUTRAL';
+          const price = s.input.intraday.ib.current_close;
+          const narrative = s.decoded?.one_liner || '...';
+          return `[${s.input.current_et_time}] Price:${price} | Bias:${bias} | "${narrative}"`;
+      })
+      .join('\n'); // Full history joined
+
     return `
-      SYSTEM CONTEXT:
-      ROCKIT GLOBAL ASSISTANT
-      Time: ${currentSnapshot.input.current_et_time}
+      SYSTEM ROLE: ROCKIT GLOBAL SESSION ASSISTANT
       
-      Focus on session history and psychology.
+      ==================================================
+      1. CURRENT MARKET STATE (SNAPSHOT: ${currentTime})
+      - Price: ${currentSnapshot.input.intraday.ib.current_close}
+      - Bias: ${currentSnapshot.decoded?.bias}
+      - Confidence: ${currentSnapshot.decoded?.confidence}
+      - Day Type: ${currentSnapshot.decoded?.day_type?.type}
+      - Narrative: ${currentSnapshot.decoded?.one_liner}
+      
+      2. FULL SESSION CHRONOLOGY
+      ${sessionLog}
+
+      3. STRATEGIC PLAYBOOK (REFERENCE)
+      ${playbookContent ? playbookContent.substring(0, 6000) + "..." : "Playbook Not Loaded"}
+
+      4. PSYCHOLOGY PROTOCOL (MINDSET)
+      ${psychContent ? psychContent.substring(0, 3000) : "Psychology Not Loaded"}
+      ==================================================
+      
+      INSTRUCTIONS:
+      - You are the central intelligence for this session.
+      - You have awareness of the entire session history (Chronology) and the strategic rules (Playbook).
+      - When the user asks "What happened?", summarize the Chronology.
+      - When the user asks "What should I do?", refer to the Playbook and Current Bias.
+      - Use the Psychology Protocol to keep the user calm and objective.
     `;
-  }, [currentSnapshot, processedSnapshots]);
+  }, [currentSnapshot, processedSnapshots, playbookContent, psychContent]);
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
@@ -367,7 +403,7 @@ const App: React.FC = () => {
         onClose={() => setIsGlobalChatOpen(false)} 
         title="Global Session Assistant" 
         contextData={globalContext} 
-        initialReport="I'm connected to the session stream. How can I help?" 
+        initialReport={currentSnapshot?.decoded?.one_liner || "ROCKIT Engine Online."} 
       />
 
       <AppHeader 
