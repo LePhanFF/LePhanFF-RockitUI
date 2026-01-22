@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
-import { Send, X, MessageSquare, Bot, User, Loader2, Sparkles, Copy, Check, Mic, MicOff, Volume2, Camera, CameraOff, Eye, Activity, ShieldCheck, Paperclip, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Send, X, MessageSquare, Bot, User, Loader2, Sparkles, Copy, Check, Mic, MicOff, Volume2, Camera, CameraOff, Eye, Activity, ShieldCheck, Paperclip, Image as ImageIcon, Trash2, Monitor, StopCircle } from 'lucide-react';
 
 interface ChatPanelProps {
   isOpen: boolean;
@@ -114,7 +113,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
 
   // --- LIVE STATE ---
   const [isLive, setIsLive] = useState(false);
-  const [isVideoActive, setIsVideoActive] = useState(false); 
+  const [activeVideoMode, setActiveVideoMode] = useState<'none' | 'camera' | 'screen'>('none');
   const [isLiveConnecting, setIsLiveConnecting] = useState(false);
   const [liveVolume, setLiveVolume] = useState(0); 
   const [isSendingFrame, setIsSendingFrame] = useState(false);
@@ -128,11 +127,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
   const nextStartTime = useRef<number>(0);
   const audioSources = useRef<Set<AudioBufferSourceNode>>(new Set());
   
-  // Video Refs
+  // Video/Screen Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoIntervalRef = useRef<number | null>(null);
-  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null); // For Camera or Screen
+  const audioStreamRef = useRef<MediaStream | null>(null); // For Mic
 
   const [psychVideoContent, setPsychVideoContent] = useState<string>('');
 
@@ -228,7 +228,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
   };
 
   const handleSend = async () => {
-    if ((!input.trim() && !pendingImage) || !chatSession.current) return;
+    // Allow send if live OR if chat session exists
+    if ((!input.trim() && !pendingImage) || (!chatSession.current && !isLive)) return;
     
     const userText = input;
     const currentImage = pendingImage; // Capture reference
@@ -245,6 +246,29 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
         timestamp: getCurrentTime() 
     }]);
     
+    // --- LIVE MODE SEND ---
+    if (isLive && liveSession.current) {
+        liveSession.current.then(session => {
+            // Send Text
+            if (userText) {
+                // Construct Content object properly
+                session.sendRealtimeInput({
+                    content: [{ role: 'user', parts: [{ text: userText }] }]
+                });
+            }
+            // Send Image if present
+            if (currentImage) {
+                session.sendRealtimeInput({
+                    media: { mimeType: currentImage.mimeType, data: currentImage.data }
+                });
+            }
+        }).catch(e => console.error("Failed to send to live session", e));
+        
+        // Return early for Live Mode, response comes via onmessage stream
+        return;
+    }
+
+    // --- TEXT CHAT MODE SEND ---
     setIsTyping(true);
     
     try {
@@ -286,16 +310,22 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
   const stopLiveSession = async () => {
       // 1. Update State immediately
       setIsLive(false);
-      setIsVideoActive(false);
+      setActiveVideoMode('none');
       setIsLiveConnecting(false);
       setLiveVolume(0);
       setIsSendingFrame(false);
 
-      // 2. Stop Video Stream (Release Camera Hardware)
+      // 2. Stop Video Streams
       if (videoStreamRef.current) {
           videoStreamRef.current.getTracks().forEach(track => track.stop());
           videoStreamRef.current = null;
       }
+      // 3. Stop Audio Streams
+      if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach(track => track.stop());
+          audioStreamRef.current = null;
+      }
+
       if (videoRef.current) {
           videoRef.current.srcObject = null;
       }
@@ -304,7 +334,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
           videoIntervalRef.current = null;
       }
 
-      // 3. Close Audio Processing Nodes
+      // 4. Close Audio Processing Nodes
       if (inputSource.current) {
           try { inputSource.current.disconnect(); } catch (e) {}
           inputSource.current = null;
@@ -314,7 +344,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
           processor.current = null;
       }
       
-      // 4. Close Audio Contexts (Critical for re-enabling later)
+      // 5. Close Audio Contexts (Critical for re-enabling later)
       const closePromises = [];
       if (inputAudioContext.current && inputAudioContext.current.state !== 'closed') {
           closePromises.push(inputAudioContext.current.close().catch(() => {}));
@@ -327,13 +357,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
       inputAudioContext.current = null;
       outputAudioContext.current = null;
 
-      // 5. Clear Audio Buffers
+      // 6. Clear Audio Buffers
       if (audioSources.current) {
           audioSources.current.forEach(s => { try { s.stop(); } catch(e) {} });
           audioSources.current.clear();
       }
 
-      // 6. Close API Session
+      // 7. Close API Session
       if (liveSession.current) {
           liveSession.current.then(session => {
               try { session.close(); } catch(e) { console.warn("Session close error", e); }
@@ -342,7 +372,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
       }
   };
 
-  const startLiveSession = async (useVideo: boolean = false) => {
+  const startLiveSession = async (videoMode: 'none' | 'camera' | 'screen' = 'none') => {
       // Prevent double clicking
       if (isLiveConnecting) return;
 
@@ -352,7 +382,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
       }
 
       setIsLiveConnecting(true);
-      setIsVideoActive(useVideo);
+      setActiveVideoMode(videoMode);
 
       try {
           // --- 1. Initialize Audio Contexts ---
@@ -366,23 +396,29 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
           nextStartTime.current = outputCtx.currentTime;
 
           // --- 2. Get Media Streams ---
-          const constraints = { 
-              audio: true, 
-              video: useVideo ? { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } : false 
-          };
+          // Always need Microphone
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          audioStreamRef.current = audioStream;
+
+          let videoStream: MediaStream | null = null;
+
+          if (videoMode === 'camera') {
+              videoStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 15 } } });
+          } else if (videoMode === 'screen') {
+              // cursor property might not be in MediaTrackConstraints definition in some TS environments
+              videoStream = await navigator.mediaDevices.getDisplayMedia({ video: { cursor: "always" } as any, audio: false });
+          }
           
-          const stream = await navigator.mediaDevices.getUserMedia(constraints);
-          
-          if (useVideo && videoRef.current) {
-              videoRef.current.srcObject = stream;
-              videoStreamRef.current = stream;
+          videoStreamRef.current = videoStream;
+
+          if (videoStream && videoRef.current) {
+              videoRef.current.srcObject = videoStream;
               await videoRef.current.play();
           }
 
           // --- 3. Prepare Prompt ---
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          // Increased context limit to prevent data loss that causes hallucinations
-          const truncatedVoiceContext = smartTruncate(contextData, 100000); // Expanded context window
+          const truncatedVoiceContext = smartTruncate(contextData, 100000); 
 
           const standardPrompt = `
                 You are a trading assistant participating in a verbal debrief.
@@ -402,24 +438,38 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
           `;
 
           // STRICT VISUAL PROMPT
-          const videoPrompt = `
+          let visualPrompt = "";
+          if (videoMode === 'camera') {
+              visualPrompt = `
                 ${psychVideoContent || "You are a specialized Trading Performance Coach."}
                 
                 CRITICAL MISSION:
-                The user has explicitly requested TILT MONITORING.
+                The user has explicitly requested TILT MONITORING via their webcam.
                 They cannot see themselves, so YOU are their mirror.
                 
                 YOUR BEHAVIOR:
                 1. CONTINUOUS MONITORING: Watch the feed constantly.
                 2. AGGRESSIVE INTERVENTION: If you see signs of distress (hands on face, rubbing eyes, slamming desk, angry expression), STOP the user immediately.
-                3. VERBAL CONFIRMATION: Periodically confirm you are watching (e.g., "Scanning... posture looks okay." or "I see movement.").
+                3. VERBAL CONFIRMATION: Periodically confirm you are watching (e.g., "Scanning... posture looks okay.").
+              `;
+          } else if (videoMode === 'screen') {
+              visualPrompt = `
+                You are a Real-Time Technical Analyst watching the user's screen.
                 
-                ALIGNMENT:
-                Refer to the CURRENT REPORT for market context. Do not hallucinate a different market state.
-                CURRENT REPORT: ${initialReport}
+                CRITICAL MISSION:
+                The user is sharing their screen (Charts, DOM, or PnL).
+                Analyze the visual information in the video feed combined with the provided market data.
+                
+                YOUR BEHAVIOR:
+                1. CHART PATTERNS: Look for technical patterns on the screen.
+                2. DATA ALIGNMENT: Cross-reference what you see with the "CURRENT REPORT" data.
+                3. EXECUTION COACHING: If you see the user hovering over a button or managing a trade, provide objective feedback based on the Bias.
+              `;
+          }
 
-                CONTEXT: ${truncatedVoiceContext}
-          `;
+          const systemInstructionText = videoMode !== 'none' 
+                ? `${visualPrompt}\n\nMARKET CONTEXT:\n${initialReport}\n\nDATA:\n${truncatedVoiceContext}`
+                : standardPrompt;
 
           // --- 4. Connect Live Client ---
           const sessionPromise = ai.live.connect({
@@ -429,15 +479,20 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                       console.log("Live Session Open");
                       setIsLive(true);
                       setIsLiveConnecting(false);
+                      
+                      let msg = "🔴 Voice Link Established.";
+                      if (videoMode === 'camera') msg = "👁️ STEALTH MODE ACTIVE. Video feed encrypted. I am watching for tilt...";
+                      if (videoMode === 'screen') msg = "🖥️ SCREEN SHARE ACTIVE. I am watching your charts.";
+
                       setMessages(prev => [...prev, { 
                           role: 'model', 
-                          text: useVideo ? "👁️ STEALTH MODE ACTIVE. Video feed encrypted. I am watching for tilt..." : "🔴 Voice Link Established.",
+                          text: msg,
                           timestamp: getCurrentTime()
                       }]);
 
-                      // Audio Input Handling
-                      if (!inputAudioContext.current) return;
-                      const source = inputAudioContext.current.createMediaStreamSource(stream);
+                      // Audio Input Handling (Microphone)
+                      if (!inputAudioContext.current || !audioStream) return;
+                      const source = inputAudioContext.current.createMediaStreamSource(audioStream);
                       const scriptProcessor = inputAudioContext.current.createScriptProcessor(4096, 1, 1);
                       
                       scriptProcessor.onaudioprocess = (e) => {
@@ -457,13 +512,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                       inputSource.current = source;
                       processor.current = scriptProcessor;
 
-                      // Video Input Handling
-                      if (useVideo) {
-                          // 3 FPS (330ms) for better gesture detection sensitivity
+                      // Video Input Handling (Camera or Screen)
+                      if (videoMode !== 'none') {
+                          // 3 FPS (330ms) for better gesture/chart detection
                           videoIntervalRef.current = window.setInterval(() => {
                               if (canvasRef.current && videoRef.current) {
                                   const ctx = canvasRef.current.getContext('2d');
                                   if (ctx) {
+                                      // Downscale for performance
                                       canvasRef.current.width = videoRef.current.videoWidth * 0.5; 
                                       canvasRef.current.height = videoRef.current.videoHeight * 0.5;
                                       ctx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -517,13 +573,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                   onerror: (e) => {
                       console.error("Live Error", e);
                       stopLiveSession();
-                      setMessages(prev => [...prev, { role: 'model', text: "⚠️ Connection Interrupted.", timestamp: getCurrentTime() }]);
+                      setMessages(prev => [...prev, { role: 'model', text: "⚠️ Connection Interrupted. " + (e instanceof Error ? e.message : ''), timestamp: getCurrentTime() }]);
                   }
               },
               config: {
-                  responseModalities: [Modality.AUDIO],
+                  responseModalities: ['AUDIO'], // Configured using string literal array for safety
                   speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
-                  systemInstruction: useVideo ? videoPrompt : standardPrompt
+                  systemInstruction: { parts: [{ text: systemInstructionText }] } // Configured as Content object
               }
           });
           liveSession.current = sessionPromise;
@@ -531,29 +587,46 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
       } catch (e: any) {
           console.error("Start Live Error", e);
           setIsLiveConnecting(false);
+          setActiveVideoMode('none');
           let errorMsg = "Connection Failed.";
-          if (e.name === 'NotAllowedError') errorMsg = "Microphone/Camera access denied.";
+          if (e.name === 'NotAllowedError') {
+              if (e.message?.includes("display-capture")) {
+                  errorMsg = "Screen sharing blocked. Check 'display-capture' permissions.";
+              } else {
+                  errorMsg = "Microphone/Camera access denied.";
+              }
+          }
           else if (e.name === 'NotFoundError') errorMsg = "Device not found.";
           else if (e.name === 'NotReadableError' || (e.message && e.message.includes('Device in use'))) errorMsg = "Device in use. Close other apps.";
+          
           setMessages(prev => [...prev, { role: 'model', text: `⚠️ ${errorMsg}`, timestamp: getCurrentTime() }]);
       }
   };
 
   const toggleVideo = async () => {
       if (isLiveConnecting) return;
-      if (isVideoActive && isLive) {
+      if (activeVideoMode === 'camera' && isLive) {
           await stopLiveSession();
       } else {
-          await startLiveSession(true);
+          await startLiveSession('camera');
+      }
+  };
+
+  const toggleScreenShare = async () => {
+      if (isLiveConnecting) return;
+      if (activeVideoMode === 'screen' && isLive) {
+          await stopLiveSession();
+      } else {
+          await startLiveSession('screen');
       }
   };
 
   const toggleAudio = async () => {
       if (isLiveConnecting) return;
-      if (!isVideoActive && isLive) {
+      if (activeVideoMode === 'none' && isLive) {
           await stopLiveSession();
       } else {
-          await startLiveSession(false);
+          await startLiveSession('none');
       }
   };
 
@@ -584,8 +657,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                         <h3 className="text-sm font-black uppercase tracking-widest text-slate-200">{title}</h3>
                         <div className="flex items-center gap-2">
                             <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5">
-                                {isVideoActive ? (
+                                {activeVideoMode === 'camera' ? (
                                     <span className="text-emerald-400 font-bold flex items-center gap-1"><Eye className="w-3 h-3"/> TILT MONITOR</span> 
+                                ) : activeVideoMode === 'screen' ? (
+                                    <span className="text-sky-400 font-bold flex items-center gap-1"><Monitor className="w-3 h-3"/> SCREEN WATCH</span> 
                                 ) : isLive ? (
                                     <span className="text-rose-400 font-bold">VOICE ACTIVE</span>
                                 ) : (
@@ -596,18 +671,32 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                     </div>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    {/* VIDEO BTN */}
+                    {/* VIDEO BTN (TILT) */}
                     <button 
                         onClick={toggleVideo}
                         disabled={isLiveConnecting}
                         className={`p-2 rounded-lg border transition-all ${
-                            isVideoActive && isLive
+                            activeVideoMode === 'camera' && isLive
                                 ? 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-700 shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
                                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700 disabled:opacity-50'
                         }`}
-                        title="Start Video Monitor"
+                        title="Start Camera (Tilt Monitor)"
                     >
-                        {isVideoActive && isLive ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
+                        {activeVideoMode === 'camera' && isLive ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
+                    </button>
+
+                    {/* SCREEN SHARE BTN */}
+                    <button 
+                        onClick={toggleScreenShare}
+                        disabled={isLiveConnecting}
+                        className={`p-2 rounded-lg border transition-all ${
+                            activeVideoMode === 'screen' && isLive
+                                ? 'bg-sky-600 text-white border-sky-500 hover:bg-sky-700 shadow-[0_0_15px_rgba(14,165,233,0.4)]' 
+                                : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700 disabled:opacity-50'
+                        }`}
+                        title="Share Screen (Chart Analysis)"
+                    >
+                        {activeVideoMode === 'screen' && isLive ? <StopCircle className="w-4 h-4 animate-pulse" /> : <Monitor className="w-4 h-4" />}
                     </button>
 
                     {/* AUDIO BTN */}
@@ -615,13 +704,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                         onClick={toggleAudio}
                         disabled={isLiveConnecting}
                         className={`p-2 rounded-lg border transition-all ${
-                            !isVideoActive && isLive
+                            activeVideoMode === 'none' && isLive
                                 ? 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700 shadow-[0_0_15px_rgba(225,29,72,0.4)]' 
                                 : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700 disabled:opacity-50'
                         }`}
-                        title="Start Voice Chat"
+                        title="Start Voice Chat Only"
                     >
-                        {isLiveConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : !isVideoActive && isLive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                        {isLiveConnecting ? <Loader2 className="w-4 h-4 animate-spin" /> : activeVideoMode === 'none' && isLive ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                     </button>
                     
                     <button onClick={handleCopyChat} className={`p-2 rounded-lg border transition-all ${copied ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-700'}`} title="Copy Full Chat Log">
@@ -634,32 +723,34 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                 </div>
             </div>
 
-            {/* STEALTH VIDEO STATUS INDICATOR */}
-            {isVideoActive && isLive && (
-                <div className="bg-slate-900/90 border-b border-emerald-500/30 p-3 flex items-center justify-between animate-in slide-in-from-top duration-300">
+            {/* VIDEO/SCREEN STATUS INDICATOR */}
+            {activeVideoMode !== 'none' && isLive && (
+                <div className={`bg-slate-900/90 border-b p-3 flex items-center justify-between animate-in slide-in-from-top duration-300 ${activeVideoMode === 'camera' ? 'border-emerald-500/30' : 'border-sky-500/30'}`}>
                     <div className="flex items-center gap-3">
-                        <div className="relative flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500/10 border border-emerald-500/30">
-                            {isSendingFrame && <div className="absolute inset-0 rounded-full border-2 border-emerald-500 animate-ping opacity-20"></div>}
-                            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <div className={`relative flex items-center justify-center w-8 h-8 rounded-full border ${activeVideoMode === 'camera' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-sky-500/10 border-sky-500/30'}`}>
+                            {isSendingFrame && <div className={`absolute inset-0 rounded-full border-2 animate-ping opacity-20 ${activeVideoMode === 'camera' ? 'border-emerald-500' : 'border-sky-500'}`}></div>}
+                            {activeVideoMode === 'camera' ? <ShieldCheck className="w-4 h-4 text-emerald-400" /> : <Monitor className="w-4 h-4 text-sky-400" />}
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase text-emerald-400 tracking-widest flex items-center gap-2">
-                                TILT GUARD ACTIVE
-                                {isSendingFrame && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+                            <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${activeVideoMode === 'camera' ? 'text-emerald-400' : 'text-sky-400'}`}>
+                                {activeVideoMode === 'camera' ? 'TILT GUARD ACTIVE' : 'SCREEN WATCH ACTIVE'}
+                                {isSendingFrame && <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${activeVideoMode === 'camera' ? 'bg-emerald-400' : 'bg-sky-400'}`} />}
                             </span>
-                            <span className="text-[9px] font-mono text-emerald-600/80">Video Stream Active (Hidden)</span>
+                            <span className={`text-[9px] font-mono ${activeVideoMode === 'camera' ? 'text-emerald-600/80' : 'text-sky-600/80'}`}>
+                                {activeVideoMode === 'camera' ? 'Video Stream Active (Hidden)' : 'Analyzing Chart Data...'}
+                            </span>
                         </div>
                     </div>
                     <div className="flex items-end gap-0.5 h-4">
                          {[...Array(5)].map((_, i) => (
-                            <div key={i} className="w-1 bg-emerald-500/50 rounded-full transition-all duration-75" style={{ height: `${Math.max(20, liveVolume * 100 * (Math.random() + 0.5))}%` }} />
+                            <div key={i} className={`w-1 rounded-full transition-all duration-75 ${activeVideoMode === 'camera' ? 'bg-emerald-500/50' : 'bg-sky-500/50'}`} style={{ height: `${Math.max(20, liveVolume * 100 * (Math.random() + 0.5))}%` }} />
                         ))}
                     </div>
                 </div>
             )}
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar bg-slate-950/80 relative">
-                {isLive && !isVideoActive && (
+                {isLive && activeVideoMode === 'none' && (
                     <div className="sticky top-0 left-0 right-0 z-20 flex justify-center mb-4">
                         <div className="bg-slate-900/90 backdrop-blur-md border border-rose-500/30 rounded-xl px-4 py-2 flex items-center gap-3 shadow-xl">
                             <div className="flex gap-1 h-6 items-center">
@@ -753,13 +844,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                         onPaste={handlePaste}
-                        placeholder={isLive ? "Listening mode active..." : "Ask follow-up (Paste image supported)..."}
+                        placeholder={isLive ? "Type to interject..." : "Ask follow-up (Paste image supported)..."}
                         className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-10 pr-12 text-sm text-slate-200 outline-none focus:border-indigo-500 transition-colors shadow-inner placeholder:text-slate-600"
-                        disabled={isTyping || isLive} 
+                        disabled={(isTyping && !isLive)} 
                     />
                     <button 
                         onClick={handleSend}
-                        disabled={(!input.trim() && !pendingImage) || isTyping || isLive}
+                        disabled={(!input.trim() && !pendingImage) || (isTyping && !isLive)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-lg transition-colors shadow-lg"
                     >
                         {isTyping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
