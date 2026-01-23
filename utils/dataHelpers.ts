@@ -4,6 +4,7 @@ import { DecodedOutput } from '../types';
 export const GCS_BUCKET_BASE = "https://storage.googleapis.com/rockit-data"; 
 export const PLAYBOOK_URL = "https://storage.googleapis.com/rockit-data/inference/playbooks.md";
 export const PSYCH_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-psychology.md";
+export const TPO_ANALYSIS_URL = "https://storage.googleapis.com/rockit-data/inference/tpo-analysis.md";
 
 // Data Sources - Google Drive Export Links
 export const CSV_URLS = {

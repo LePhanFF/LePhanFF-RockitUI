@@ -7,10 +7,10 @@ import { useTheme } from './components/ThemeContext';
 import { LoginScreen } from './components/LoginScreen';
 import { Sidebar } from './components/Sidebar';
 import { AppHeader } from './components/AppHeader';
-import { GCS_BUCKET_BASE, PLAYBOOK_URL, PSYCH_URL, hardenedClean, salvageIntel } from './utils/dataHelpers';
+import { GCS_BUCKET_BASE, PLAYBOOK_URL, PSYCH_URL, TPO_ANALYSIS_URL, hardenedClean, salvageIntel } from './utils/dataHelpers';
 import { Loader2, TerminalSquare, Activity, Network, AlertCircle } from 'lucide-react';
 
-const REFRESH_INTERVAL_SEC = 30; 
+const REFRESH_INTERVAL_SEC = 10; 
 
 const App: React.FC = () => {
   const { theme, cycleTheme } = useTheme();
@@ -49,6 +49,7 @@ const App: React.FC = () => {
   const [isGlobalChatOpen, setIsGlobalChatOpen] = useState(false);
   const [playbookContent, setPlaybookContent] = useState<string>('');
   const [psychContent, setPsychContent] = useState<string>('');
+  const [tpoAnalysisContent, setTpoAnalysisContent] = useState<string>('');
 
   const autoScrollEnabled = useRef(true);
   const lastLatestTimeRef = useRef<string | null>(null);
@@ -67,6 +68,14 @@ const App: React.FC = () => {
       .then(r => r.text())
       .then(t => setPsychContent(t))
       .catch(e => console.warn("Global Chat: Psychology fetch failed", e));
+  }, []);
+
+  // 3. Fetch TPO Analysis Logic
+  useEffect(() => {
+    fetch(`${TPO_ANALYSIS_URL}?cb=${Date.now()}`)
+      .then(r => r.text())
+      .then(t => setTpoAnalysisContent(t))
+      .catch(e => console.warn("App: TPO Analysis fetch failed", e));
   }, []);
 
   const handleLogout = () => {
@@ -380,16 +389,20 @@ const App: React.FC = () => {
 
       4. PSYCHOLOGY PROTOCOL (MINDSET)
       ${psychContent ? psychContent.substring(0, 3000) : "Psychology Not Loaded"}
+
+      5. TPO ANALYSIS FRAMEWORK
+      ${tpoAnalysisContent ? tpoAnalysisContent.substring(0, 4000) : "TPO Analysis Protocol Not Loaded"}
       ==================================================
       
       INSTRUCTIONS:
       - You are the central intelligence for this session.
       - You have awareness of the entire session history (Chronology) and the strategic rules (Playbook).
+      - If asked about TPO structure specifically, reference the TPO ANALYSIS FRAMEWORK.
       - When the user asks "What happened?", summarize the Chronology.
       - When the user asks "What should I do?", refer to the Playbook and Current Bias.
       - Use the Psychology Protocol to keep the user calm and objective.
     `;
-  }, [currentSnapshot, processedSnapshots, playbookContent, psychContent]);
+  }, [currentSnapshot, processedSnapshots, playbookContent, psychContent, tpoAnalysisContent]);
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={() => setIsAuthenticated(true)} />;
@@ -446,6 +459,7 @@ const App: React.FC = () => {
               activeTab={activeTab}
               isGlobalChatOpen={isGlobalChatOpen} 
               htfData={htfData}
+              tpoAnalysisContent={tpoAnalysisContent} // PASS PROP
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-content-muted">

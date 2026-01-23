@@ -25,9 +25,10 @@ interface DashboardProps {
   activeTab: string;
   isGlobalChatOpen?: boolean; 
   htfData?: any; 
+  tpoAnalysisContent?: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab, isGlobalChatOpen = false, htfData }) => {
+const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab, isGlobalChatOpen = false, htfData, tpoAnalysisContent }) => {
   const input = snapshot?.input;
   const currentTime = input?.current_et_time || 'N/A';
   
@@ -68,12 +69,12 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
             {activeTab === 'dpoc' && <DPOCTab dpocData={dpocData} dpocHistory={dpocHistory || []} time={currentTime} />}
             {activeTab === 'globex' && <GlobexTab premarket={premarket} time={currentTime} />}
             {activeTab === 'profile' && <ProfileTab vol={vol} tpo={tpo} time={currentTime} />}
-            {activeTab === 'tpo' && <TPOTab tpo={tpo} vol={vol} ib={ib} snapshotTime={currentTime} allSnapshots={allSnapshots} />}
+            {activeTab === 'tpo' && <TPOTab tpo={tpo} vol={vol} ib={ib} snapshotTime={currentTime} allSnapshots={allSnapshots} tpoAnalysisContent={tpoAnalysisContent} />}
             {activeTab === 'thinking' && <ThinkingTab thinkingText={thinkingText} time={currentTime} />}
 
             {activeTab === 'coach' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <GeminiAudit snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} />
+                 <GeminiAudit snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} tpoAnalysisContent={tpoAnalysisContent} />
                </div>
             )}
 
@@ -96,7 +97,7 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
 
              {activeTab === 'trade-idea' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <TradeIdea snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} />
+                 <TradeIdea snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} tpoAnalysisContent={tpoAnalysisContent} />
                </div>
             )}
 

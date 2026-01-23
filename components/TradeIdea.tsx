@@ -49,6 +49,7 @@ interface TradeIdeaProps {
   snapshots: MarketSnapshot[];
   currentSnapshot: MarketSnapshot;
   isGlobalChatOpen?: boolean;
+  tpoAnalysisContent?: string;
 }
 
 // --- ANIMATION STYLES & COMMON DEFS ---
@@ -328,7 +329,7 @@ const StrategyComparisonRow = ({ label, data, icon: Icon }: any) => (
     </div>
 );
 
-const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen }) => {
+const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, tpoAnalysisContent }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -473,6 +474,11 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
         PART 4: CURRENT CONFLUENCES (LOGIC TAB)
         ${JSON.stringify(lastInput.core_confluences)}
         ==================================================================================
+
+        ---------------------------------------------------------
+        🔍 TPO ANALYSIS GUIDELINES (FOR STRUCTURE):
+        ${tpoAnalysisContent || "Standard TPO Principles Apply."}
+        ---------------------------------------------------------
 
         PSYCHOLOGY PROTOCOL (TRADER SUPPORT):
         ${psychContent || "No Psychology Protocol Loaded."}

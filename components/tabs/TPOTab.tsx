@@ -1,7 +1,9 @@
 
 import React, { useMemo, useState, useRef } from 'react';
 import TPOChart from '../TPOChart';
-import { AlignJustify, AlertOctagon, ArrowUpFromLine, ArrowDownFromLine, BoxSelect, Clock, Copy, ClipboardCheck, Camera, Check } from 'lucide-react';
+import TPOAnalyzer from '../TPOAnalyzer';
+import { AlignJustify, AlertOctagon, ArrowUpFromLine, ArrowDownFromLine, BoxSelect, Clock, Copy, ClipboardCheck, Camera, Check, Brain } from 'lucide-react';
+import { generateTPOData } from '../../utils/tpoHelpers';
 
 interface TPOTabProps {
   tpo: any;
@@ -9,22 +11,40 @@ interface TPOTabProps {
   ib: any;
   snapshotTime: string;
   allSnapshots: any[];
+  tpoAnalysisContent?: string;
 }
 
-const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshots }) => {
+const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshots, tpoAnalysisContent }) => {
   const [timeframe, setTimeframe] = useState<'30m' | '5m'>('30m');
+  const [viewMode, setViewMode] = useState<'chart' | 'analyze'>('chart');
   const [copied, setCopied] = useState(false);
   const [imageCopied, setImageCopied] = useState(false);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   
-  // Filter history up to current snapshot time
+  // Filter history:
+  // 1. Up to current snapshot time (Point-in-Time)
+  // 2. Starting strictly from 09:30 (RTH Open)
   const historyUpToNow = useMemo(() => {
     if (!allSnapshots || allSnapshots.length === 0) return [];
-    // Find index of current snapshot
+    
+    // Find cutoff index for current time
     const idx = allSnapshots.findIndex(s => s.input?.current_et_time === snapshotTime);
-    if (idx === -1) return allSnapshots;
-    return allSnapshots.slice(0, idx + 1);
+    
+    // Slice data up to current moment
+    const sliced = (idx === -1) ? allSnapshots : allSnapshots.slice(0, idx + 1);
+    
+    // Filter out Pre-market (Before 09:30)
+    return sliced.filter(s => s.input?.current_et_time >= "09:30");
   }, [allSnapshots, snapshotTime]);
+
+  // Generate Data for Analyzer (Both Timeframes)
+  const analyzerData = useMemo(() => {
+      if (viewMode !== 'analyze') return null;
+      return {
+          tpo30m: generateTPOData(historyUpToNow, '30m', 0.5, { high: ib?.ib_high, low: ib?.ib_low }),
+          tpo5m: generateTPOData(historyUpToNow, '5m', 0.5, { high: ib?.ib_high, low: ib?.ib_low })
+      };
+  }, [historyUpToNow, ib, viewMode]);
 
   const hasPoorHigh = tpo?.poor_high === 1 || tpo?.poor_high === true;
   const hasPoorLow = tpo?.poor_low === 1 || tpo?.poor_low === true;
@@ -60,37 +80,26 @@ const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshot
     if (!originalSvg) return;
 
     try {
-        // 1. Get Dimensions
-        // Use clientWidth for the width since TPOChart uses width="100%"
         const width = chartContainerRef.current.clientWidth;
-        // Use the explicit height attribute from the SVG (calculated by TPOChart based on rows)
         const heightAttr = originalSvg.getAttribute('height');
         const height = heightAttr ? parseFloat(heightAttr) : chartContainerRef.current.scrollHeight;
 
-        // 2. Canvas Setup
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // 3. Draw Background (Dark Slate / Slate-950)
         ctx.fillStyle = "#0f172a"; 
         ctx.fillRect(0, 0, width, height);
 
-        // 4. Prepare SVG
         const svgClone = originalSvg.cloneNode(true) as SVGElement;
-        
-        // Explicitly set pixel dimensions on the clone to ensure it renders correctly in the blob
         svgClone.setAttribute("width", `${width}`);
         svgClone.setAttribute("height", `${height}`);
         svgClone.setAttribute("viewBox", `0 0 ${width} ${height}`);
         svgClone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
         
-        // 5. Serialize
         const svgData = new XMLSerializer().serializeToString(svgClone);
-        
-        // 6. Render to Image -> Canvas -> Blob
         const img = new Image();
         const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svgBlob);
@@ -98,7 +107,6 @@ const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshot
         img.onload = () => {
             ctx.drawImage(img, 0, 0, width, height);
             URL.revokeObjectURL(url);
-            
             canvas.toBlob((blob) => {
                 if (blob) {
                     navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
@@ -110,64 +118,47 @@ const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshot
                 }
             }, 'image/png');
         };
-        img.onerror = (e) => {
-            console.error("SVG Image Load Error", e);
-            URL.revokeObjectURL(url);
-        };
         img.src = url;
-
-    } catch (e) {
-        console.error("Snapshot error:", e);
-    }
+    } catch (e) { console.error("Snapshot error:", e); }
   };
+
+  if (viewMode === 'analyze' && analyzerData) {
+      return (
+          <TPOAnalyzer 
+             tpo30m={analyzerData.tpo30m}
+             tpo5m={analyzerData.tpo5m}
+             snapshotTime={snapshotTime}
+             currentPrice={Number(ib?.current_close)}
+             promptTemplate={tpoAnalysisContent}
+             onBack={() => setViewMode('chart')}
+          />
+      );
+  }
 
   return (
     <div className="h-full flex flex-col animate-in fade-in duration-500 gap-4 relative">
         {/* Toolbar */}
         <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-slate-800 shrink-0">
-             {/* Timeframe Toggles */}
              <div className="flex gap-2">
-                <button 
-                    onClick={() => setTimeframe('5m')}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${
-                        timeframe === '5m' ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg' : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300'
-                    }`}
-                >
-                    5m
-                </button>
-                <button 
-                    onClick={() => setTimeframe('30m')}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${
-                        timeframe === '30m' ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg' : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300'
-                    }`}
-                >
-                    30m
-                </button>
+                <button onClick={() => setTimeframe('5m')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${timeframe === '5m' ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg' : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300'}`}>5m</button>
+                <button onClick={() => setTimeframe('30m')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${timeframe === '30m' ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg' : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300'}`}>30m</button>
             </div>
 
-            {/* Actions */}
             <div className="flex gap-2">
                 <button 
-                    onClick={handleCopyImage}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase transition-all ${
-                        imageCopied 
-                            ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' 
-                            : 'text-slate-400 bg-slate-950 border-slate-800 hover:text-white hover:border-slate-600'
-                    }`}
-                    title="Copy Full Chart Image"
+                    onClick={() => setViewMode('analyze')}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] border border-indigo-500"
                 >
-                    {imageCopied ? <Check className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
-                    <span>{imageCopied ? 'Copied' : 'Snap'}</span>
+                    <Brain className="w-3.5 h-3.5" />
+                    <span>Analyze</span>
                 </button>
-                <button 
-                    onClick={handleCopy}
-                    className={`p-1.5 rounded-lg border transition-all ${
-                        copied 
-                            ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' 
-                            : 'text-slate-400 bg-slate-950 border-slate-800 hover:text-white hover:border-slate-600'
-                    }`}
-                    title="Copy TPO Stats Text"
-                >
+
+                <div className="w-px h-6 bg-slate-800 mx-1"></div>
+
+                <button onClick={handleCopyImage} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase transition-all ${imageCopied ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-slate-400 bg-slate-950 border-slate-800 hover:text-white hover:border-slate-600'}`}>
+                    {imageCopied ? <Check className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
+                </button>
+                <button onClick={handleCopy} className={`p-1.5 rounded-lg border transition-all ${copied ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-slate-400 bg-slate-950 border-slate-800 hover:text-white hover:border-slate-600'}`}>
                     {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
             </div>

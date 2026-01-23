@@ -28,6 +28,7 @@ interface GeminiAuditProps {
   snapshots: MarketSnapshot[];
   currentSnapshot: MarketSnapshot;
   isGlobalChatOpen?: boolean;
+  tpoAnalysisContent?: string;
 }
 
 // URLs
@@ -55,7 +56,7 @@ const DEFAULT_QUESTIONS = {
   ]
 };
 
-const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen }) => {
+const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, tpoAnalysisContent }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,6 +172,11 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, i
         ${JSON.stringify(contextData)}
 
         ---------------------------------------------------------
+        🔍 TPO ANALYSIS GUIDELINES:
+        ${tpoAnalysisContent || "Standard TPO Principles Apply."}
+        ---------------------------------------------------------
+
+        ---------------------------------------------------------
         🧘 PSYCHOLOGY PROTOCOL (TRADER SUPPORT):
         ${psychContent || "No Psychology Protocol Loaded."}
         ---------------------------------------------------------
@@ -183,8 +189,9 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, i
           INSTRUCTIONS:
           1. Reference the "Grok Experience" memory if relevant patterns exist.
           2. Use the "Psychology Protocol" to detect signs of tilt, fear, or greed in the user's question or market conditions.
-          3. Answer specifically based on the SESSION DATA up to ${currentSnapshot?.input?.current_et_time}.
-          4. Format the response in clear Markdown with bold key terms.
+          3. If the question relates to TPO, strictly adhere to the "TPO ANALYSIS GUIDELINES".
+          4. Answer specifically based on the SESSION DATA up to ${currentSnapshot?.input?.current_et_time}.
+          5. Format the response in clear Markdown with bold key terms.
         `;
       } else {
         prompt += `
