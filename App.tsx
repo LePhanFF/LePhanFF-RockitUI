@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot, DecodedOutput } from './types';
 import Dashboard from './components/Dashboard';
 import ChatPanel from './components/ChatPanel';
+import JournalModal from './components/JournalModal';
 import { useTheme } from './components/ThemeContext';
 import { LoginScreen } from './components/LoginScreen';
 import { Sidebar } from './components/Sidebar';
@@ -47,6 +48,8 @@ const App: React.FC = () => {
 
   // Global Chat State
   const [isGlobalChatOpen, setIsGlobalChatOpen] = useState(false);
+  const [isJournalOpen, setIsJournalOpen] = useState(false);
+  
   const [playbookContent, setPlaybookContent] = useState<string>('');
   const [psychContent, setPsychContent] = useState<string>('');
   const [tpoAnalysisContent, setTpoAnalysisContent] = useState<string>('');
@@ -419,6 +422,13 @@ const App: React.FC = () => {
         initialReport={currentSnapshot?.decoded?.one_liner || "ROCKIT Engine Online."} 
       />
 
+      <JournalModal 
+        isOpen={isJournalOpen}
+        onClose={() => setIsJournalOpen(false)}
+        sessionDate={currentSnapshot?.input?.session_date || ''}
+        currentTime={currentSnapshot?.input?.current_et_time || ''}
+      />
+
       <AppHeader 
         currentSnapshot={currentSnapshot}
         activeTab={activeTab}
@@ -429,6 +439,8 @@ const App: React.FC = () => {
         handleRefresh={() => { fetchFileList(true); setCountdown(REFRESH_INTERVAL_SEC); }}
         isGlobalChatOpen={isGlobalChatOpen}
         setIsGlobalChatOpen={setIsGlobalChatOpen}
+        isJournalOpen={isJournalOpen}
+        setIsJournalOpen={setIsJournalOpen}
         urlCopied={urlCopied}
         handleShareUrl={handleShareUrl}
         theme={theme}

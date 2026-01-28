@@ -15,7 +15,12 @@ import {
   Copy,
   ClipboardCheck,
   Ban,
-  MessageSquare
+  MessageSquare,
+  Server,
+  RefreshCw,
+  Wifi,
+  WifiOff,
+  Laptop
 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
 
@@ -34,6 +39,11 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
   const [copied, setCopied] = useState(false);
   const [psychContent, setPsychContent] = useState<string>('');
 
+  // Server Hello State
+  const [serverStatus, setServerStatus] = useState<'idle' | 'checking' | 'live' | 'simulated'>('idle');
+  const [serverMessage, setServerMessage] = useState<string>('');
+  const [sessionId, setSessionId] = useState<string>('');
+
   // Chat State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [lastContext, setLastContext] = useState<string>('');
@@ -45,6 +55,47 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
       .then(t => setPsychContent(t))
       .catch(e => console.warn("RockitAudit: Psychology fetch failed", e));
   }, []);
+
+  // Auto-Ping Server on Mount
+  useEffect(() => {
+    callServerHello();
+  }, []);
+
+  const callServerHello = async () => {
+    setServerStatus('checking');
+    setServerMessage("Handshaking...");
+    
+    try {
+      // Attempt to fetch from backend
+      // Increased timeout to 5000ms to handle Cloud Run cold starts
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch('/api/hello', {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      const contentType = res.headers.get("content-type");
+      if (!res.ok || !contentType || !contentType.includes("application/json")) {
+         throw new Error(`Backend Unavailable (HTTP ${res.status})`);
+      }
+
+      const data = await res.json();
+      setServerStatus('live');
+      setServerMessage(data.message);
+      setSessionId(data.sessionId);
+
+    } catch (e: any) {
+      console.warn("Server Check Failed (Switching to Simulation):", e);
+      // Fallback simulation
+      setServerStatus('simulated');
+      setServerMessage("Browser-Side Demo Mode Active.");
+      setSessionId("local-" + Math.random().toString(36).substring(2, 10));
+    }
+  };
 
   const generateRockitAnalysis = async () => {
     if (!snapshots || snapshots.length === 0) {
@@ -240,6 +291,14 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
                 </button>
             )}
             
+            <button 
+                onClick={callServerHello}
+                className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-widest rounded-xl transition-all shadow-lg border border-indigo-500/50"
+            >
+                {serverStatus === 'checking' ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Server className="w-4 h-4" />}
+                <span>Check Server</span>
+            </button>
+
             {!loading && (
                 <button 
                     onClick={generateRockitAnalysis}
@@ -250,6 +309,35 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
                 </button>
             )}
         </div>
+      </div>
+
+      {/* Server Status Bar */}
+      <div className={`px-6 py-3 border-b font-mono text-xs flex items-center justify-between animate-in fade-in slide-in-from-top-1 relative z-10 ${
+          serverStatus === 'live' ? 'bg-emerald-950/30 border-emerald-500/20 text-emerald-400' :
+          serverStatus === 'simulated' ? 'bg-indigo-950/30 border-indigo-500/20 text-indigo-300' :
+          'bg-slate-950/50 border-slate-800 text-slate-400'
+      }`}>
+          <div className="flex items-center gap-3">
+              {serverStatus === 'checking' && <RefreshCw className="w-4 h-4 animate-spin" />}
+              {serverStatus === 'live' && <Wifi className="w-4 h-4" />}
+              {serverStatus === 'simulated' && <Laptop className="w-4 h-4" />}
+              
+              <span className="font-bold tracking-wider uppercase">
+                  {serverStatus === 'idle' && "Ready"}
+                  {serverStatus === 'checking' && "Connecting..."}
+                  {serverStatus === 'live' && "System Online"}
+                  {serverStatus === 'simulated' && "Demo Mode"}
+              </span>
+          </div>
+          
+          <div className="flex items-center gap-4">
+              <span className="opacity-70">{serverMessage || "Waiting for check..."}</span>
+              {sessionId && (
+                  <span className="px-2 py-0.5 rounded bg-black/20 border border-white/10 text-[10px]">
+                      ID: {sessionId}
+                  </span>
+              )}
+          </div>
       </div>
 
       {/* CHAT PANEL */}

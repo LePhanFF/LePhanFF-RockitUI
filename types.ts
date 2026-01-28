@@ -187,10 +187,11 @@ export interface MarketSnapshot {
 }
 
 export interface DecodedOutput {
-  day_type: {
+  day_type?: {
     type: string;
     timestamp: string;
   };
+  day_type_morph?: string; // Explicit field for day type morph tracking
   bias: string;
   liquidity_sweeps: Record<string, { status: string; strength: string }>;
   value_acceptance: string;

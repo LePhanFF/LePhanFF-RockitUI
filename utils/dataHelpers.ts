@@ -37,15 +37,23 @@ export const salvageIntel = (raw: string): Partial<DecodedOutput> => {
   try {
     const biasMatch = raw.match(/"bias"\s*:\s*"(.*?)"/i);
     if (biasMatch) salvaged.bias = biasMatch[1].trim().toUpperCase();
+    
     const narrativeMatch = raw.match(/"(?:one_liner|narrative|summary)"\s*:\s*"(.*?)"/i);
     if (narrativeMatch) salvaged.one_liner = narrativeMatch[1].trim();
+    
     const reasonMatch = raw.match(/"(?:day_type_reasoning|evidence|reasoning)"\s*:\s*\[([\s\S]*?)\]/i);
     if (reasonMatch) {
       const items = reasonMatch[1].match(/"(.*?)"/g);
       if (items) salvaged.day_type_reasoning = items.map(i => i.replace(/"/g, ''));
     }
+    
     const confMatch = raw.match(/"confidence"\s*:\s*"(.*?)"/i);
     if (confMatch) salvaged.confidence = confMatch[1].trim();
+
+    // Attempt to salvage day_type_morph
+    const morphMatch = raw.match(/"day_type_morph"\s*:\s*"(.*?)"/i);
+    if (morphMatch) salvaged.day_type_morph = morphMatch[1].trim();
+
   } catch (e) {
     console.warn("Salvage failed");
   }
@@ -105,4 +113,32 @@ export const fetchAndParse = async (originalUrl: string) => {
         }
         return [];
     } catch (e) { return []; }
+};
+
+export const calculateTrendStrength = (ib: any) => {
+    if (!ib || !ib.ib_high || !ib.ib_low || !ib.current_high || !ib.current_low) return "NA";
+    
+    // Ensure numbers
+    const ibH = Number(ib.ib_high);
+    const ibL = Number(ib.ib_low);
+    const curH = Number(ib.current_high);
+    const curL = Number(ib.current_low);
+    
+    const range = ibH - ibL;
+    if (range === 0) return "NA";
+
+    // Extensions beyond IB
+    const extUp = curH - ibH;
+    const extDown = ibL - curL;
+    const maxExt = Math.max(extUp, extDown);
+
+    // If inside IB (max extension is negative or zero)
+    if (maxExt <= 0) return "NA";
+
+    const ratio = maxExt / range;
+    
+    if (ratio >= 2.0) return "SUPER";
+    if (ratio >= 1.0) return "STRONG";
+    if (ratio >= 0.5) return "MODERATE";
+    return "WEAK";
 };

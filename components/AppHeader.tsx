@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Pause, Timer, RefreshCw, ArrowUpRight, ArrowDownRight, Activity, Info, Cpu, Waypoints, Globe, BarChartHorizontal, Grid3X3, Brain, Target, MessageCircle, Link, Check, Palette, Clock, User, LogOut, AlertCircle, Rocket, Lightbulb, GraduationCap, Map, Code } from 'lucide-react';
+import { LayoutDashboard, Pause, Timer, RefreshCw, ArrowUpRight, ArrowDownRight, Activity, Info, Cpu, Waypoints, Globe, BarChartHorizontal, Grid3X3, Brain, Target, MessageCircle, Link, Check, Palette, Clock, User, LogOut, AlertCircle, Rocket, Lightbulb, GraduationCap, Map, Code, BookText } from 'lucide-react';
 
 interface AppHeaderProps {
   currentSnapshot: any;
@@ -12,6 +12,8 @@ interface AppHeaderProps {
   handleRefresh: () => void;
   isGlobalChatOpen: boolean;
   setIsGlobalChatOpen: (o: boolean) => void;
+  isJournalOpen: boolean;
+  setIsJournalOpen: (o: boolean) => void;
   urlCopied: boolean;
   handleShareUrl: () => void;
   theme: string;
@@ -42,6 +44,8 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   handleRefresh,
   isGlobalChatOpen,
   setIsGlobalChatOpen,
+  isJournalOpen,
+  setIsJournalOpen,
   urlCopied,
   handleShareUrl,
   theme,
@@ -177,6 +181,19 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                   title="Global Session Chat (Fast)"
                >
                   <MessageCircle className="w-4 h-4" />
+               </button>
+
+                {/* Journal Toggle */}
+               <button 
+                  onClick={() => setIsJournalOpen(!isJournalOpen)}
+                  className={`p-2 rounded-full border transition-all ${
+                      isJournalOpen 
+                        ? 'bg-indigo-500 text-white border-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.4)]' 
+                        : 'bg-surface border-border text-content-muted hover:text-accent hover:border-accent'
+                  }`} 
+                  title="Daily Journal"
+               >
+                  <BookText className="w-4 h-4" />
                </button>
 
                {/* Share Button */}

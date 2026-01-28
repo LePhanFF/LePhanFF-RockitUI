@@ -577,7 +577,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                   }
               },
               config: {
-                  responseModalities: ['AUDIO'], // Configured using string literal array for safety
+                  responseModalities: [Modality.AUDIO], // Configured using string literal array for safety
                   speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
                   systemInstruction: { parts: [{ text: systemInstructionText }] } // Configured as Content object
               }
