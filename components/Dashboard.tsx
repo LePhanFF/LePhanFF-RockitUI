@@ -31,6 +31,7 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = [], activeTab, isGlobalChatOpen = false, htfData, tpoAnalysisContent }) => {
   const input = snapshot?.input;
   const currentTime = input?.current_et_time || 'N/A';
+  const sessionDate = input?.session_date;
   
   const intraday = input?.intraday;
   const core = input?.core_confluences;
@@ -69,12 +70,19 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
             {activeTab === 'dpoc' && <DPOCTab dpocData={dpocData} dpocHistory={dpocHistory || []} time={currentTime} />}
             {activeTab === 'globex' && <GlobexTab premarket={premarket} time={currentTime} />}
             {activeTab === 'profile' && <ProfileTab vol={vol} tpo={tpo} time={currentTime} />}
-            {activeTab === 'tpo' && <TPOTab tpo={tpo} vol={vol} ib={ib} snapshotTime={currentTime} allSnapshots={allSnapshots} tpoAnalysisContent={tpoAnalysisContent} />}
+            {activeTab === 'tpo' && <TPOTab tpo={tpo} vol={vol} ib={ib} snapshotTime={currentTime} allSnapshots={allSnapshots} tpoAnalysisContent={tpoAnalysisContent} sessionDate={sessionDate} />}
             {activeTab === 'thinking' && <ThinkingTab thinkingText={thinkingText} time={currentTime} />}
 
             {activeTab === 'coach' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <GeminiAudit snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} tpoAnalysisContent={tpoAnalysisContent} />
+                 <GeminiAudit 
+                    snapshots={allSnapshots} 
+                    currentSnapshot={snapshot} 
+                    isGlobalChatOpen={isGlobalChatOpen} 
+                    tpoAnalysisContent={tpoAnalysisContent}
+                    sessionDate={sessionDate} 
+                    snapshotTime={currentTime} 
+                 />
                </div>
             )}
 
@@ -84,20 +92,34 @@ const Dashboard: React.FC<DashboardProps> = ({ snapshot, output, allSnapshots = 
                     snapshots={allSnapshots} 
                     currentSnapshot={snapshot} 
                     isGlobalChatOpen={isGlobalChatOpen} 
-                    externalHtfData={htfData} 
+                    externalHtfData={htfData}
+                    sessionDate={sessionDate} 
+                    snapshotTime={currentTime}
                  />
                </div>
             )}
 
              {activeTab === 'rk-audit' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <RockitAudit snapshots={allSnapshots} />
+                 <RockitAudit 
+                    snapshots={allSnapshots} 
+                    isGlobalChatOpen={isGlobalChatOpen} 
+                    sessionDate={sessionDate} 
+                    snapshotTime={currentTime} 
+                 />
                </div>
             )}
 
              {activeTab === 'trade-idea' && (
                <div className="h-full animate-in fade-in duration-500 flex flex-col">
-                 <TradeIdea snapshots={allSnapshots} currentSnapshot={snapshot} isGlobalChatOpen={isGlobalChatOpen} tpoAnalysisContent={tpoAnalysisContent} />
+                 <TradeIdea 
+                    snapshots={allSnapshots} 
+                    currentSnapshot={snapshot} 
+                    isGlobalChatOpen={isGlobalChatOpen} 
+                    tpoAnalysisContent={tpoAnalysisContent}
+                    sessionDate={sessionDate}
+                    snapshotTime={currentTime}
+                 />
                </div>
             )}
 

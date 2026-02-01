@@ -3,44 +3,45 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { MarketSnapshot } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { PLAYBOOK_URL, PSYCH_URL } from '../utils/dataHelpers';
+import { appendJournalEntry } from '../utils/journalService';
 import { 
   Lightbulb, 
   Target, 
   Shield, 
   AlertTriangle, 
-  CheckCircle2,
-  Quote,
-  BookOpen,
-  Link2,
-  Unlink,
-  Loader2,
-  Copy,
-  ClipboardCheck,
-  X,
-  PlayCircle,
-  TrendingUp,
-  Activity,
-  ArrowRight,
-  FileText,
-  LayoutGrid,
-  Zap,
-  BarChart2,
-  MousePointerClick,
-  Ban,
-  Flag,
-  MessageSquare,
-  History,
-  FlaskConical,
-  XCircle,
-  CheckCircle,
-  Clock,
-  ArrowRightLeft,
-  Footprints,
-  Info,
-  Maximize2,
-  RefreshCw,
-  Camera,
-  ImagePlus,
+  CheckCircle2, 
+  Quote, 
+  BookOpen, 
+  Link2, 
+  Unlink, 
+  Loader2, 
+  Copy, 
+  ClipboardCheck, 
+  X, 
+  PlayCircle, 
+  TrendingUp, 
+  Activity, 
+  ArrowRight, 
+  FileText, 
+  LayoutGrid, 
+  Zap, 
+  BarChart2, 
+  MousePointerClick, 
+  Ban, 
+  Flag, 
+  MessageSquare, 
+  History, 
+  FlaskConical, 
+  XCircle, 
+  CheckCircle, 
+  Clock, 
+  ArrowRightLeft, 
+  Footprints, 
+  Info, 
+  Maximize2, 
+  RefreshCw, 
+  Camera, 
+  ImagePlus, 
   Trash2
 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
@@ -50,6 +51,8 @@ interface TradeIdeaProps {
   currentSnapshot: MarketSnapshot;
   isGlobalChatOpen?: boolean;
   tpoAnalysisContent?: string;
+  sessionDate: string;
+  snapshotTime: string;
 }
 
 // --- ANIMATION STYLES & COMMON DEFS ---
@@ -329,7 +332,7 @@ const StrategyComparisonRow = ({ label, data, icon: Icon }: any) => (
     </div>
 );
 
-const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, tpoAnalysisContent }) => {
+const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, tpoAnalysisContent, sessionDate, snapshotTime }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -559,6 +562,11 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
         }
       }
 
+      // --- SAVE TO JOURNAL ---
+      if (fullText) {
+          await appendJournalEntry(sessionDate, snapshotTime, "_main_trade_ideas", fullText);
+      }
+
       // --- RUN BACKTEST IF ENABLED ---
       if (isBacktestMode && fullText) {
           const { primary, hedge } = extractLevels(fullText);
@@ -735,6 +743,8 @@ const TradeIdea: React.FC<TradeIdeaProps> = ({ snapshots, currentSnapshot, isGlo
         title="Trade Idea Assistant"
         contextData={lastContext}
         initialReport={report}
+        sessionDate={sessionDate}
+        snapshotTime={snapshotTime}
       />
 
       {/* PLAYBOOK LIBRARY DRAWER */}

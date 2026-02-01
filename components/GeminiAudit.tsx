@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MarketSnapshot } from '../types';
 import { GoogleGenAI } from "@google/genai";
+import { appendJournalEntry } from '../utils/journalService';
 import { 
   Sparkles, 
   Loader2, 
@@ -29,6 +30,8 @@ interface GeminiAuditProps {
   currentSnapshot: MarketSnapshot;
   isGlobalChatOpen?: boolean;
   tpoAnalysisContent?: string;
+  sessionDate: string;
+  snapshotTime: string;
 }
 
 // URLs
@@ -56,7 +59,7 @@ const DEFAULT_QUESTIONS = {
   ]
 };
 
-const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, tpoAnalysisContent }) => {
+const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, tpoAnalysisContent, sessionDate, snapshotTime }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -229,11 +232,18 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, i
         }
       });
 
+      let fullText = "";
       for await (const chunk of responseStream) {
         const text = chunk.text;
         if (text) {
+          fullText += text;
           setReport(prev => prev + text);
         }
+      }
+
+      // --- SAVE TO JOURNAL ---
+      if (fullText) {
+          await appendJournalEntry(sessionDate, snapshotTime, "_coach_global", fullText);
       }
 
     } catch (err: any) {
@@ -400,6 +410,8 @@ const GeminiAudit: React.FC<GeminiAuditProps> = ({ snapshots, currentSnapshot, i
         title="Coach's Corner"
         contextData={lastContext}
         initialReport={report}
+        sessionDate={sessionDate}
+        snapshotTime={snapshotTime}
       />
 
       {/* Content Area */}

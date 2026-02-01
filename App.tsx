@@ -450,6 +450,8 @@ const App: React.FC = () => {
         title="Global Session Assistant" 
         contextData={globalContext} 
         initialReport={currentSnapshot?.decoded?.one_liner || "ROCKIT Engine Online."} 
+        sessionDate={currentSnapshot?.input?.session_date}
+        snapshotTime={currentSnapshot?.input?.current_et_time}
       />
 
       <JournalModal 

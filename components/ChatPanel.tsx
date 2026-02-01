@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { Send, X, MessageSquare, Bot, User, Loader2, Sparkles, Copy, Check, Mic, MicOff, Volume2, Camera, CameraOff, Eye, Activity, ShieldCheck, Paperclip, Image as ImageIcon, Trash2, Monitor, StopCircle } from 'lucide-react';
+import { appendJournalEntry } from '../utils/journalService';
 
 interface ChatPanelProps {
   isOpen: boolean;
@@ -8,6 +10,8 @@ interface ChatPanelProps {
   title: string;
   contextData: string; 
   initialReport: string; 
+  sessionDate?: string;
+  snapshotTime?: string;
 }
 
 interface Message {
@@ -93,7 +97,7 @@ const smartTruncate = (text: string, maxLength: number) => {
 
 const getCurrentTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextData, initialReport }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextData, initialReport, sessionDate, snapshotTime }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -227,6 +231,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
     }
   };
 
+  const saveToJournal = async (userText: string, aiText: string) => {
+      // Use props if available, else default to today/now (e.g. for live session without snapshot context)
+      const date = sessionDate || new Date().toISOString().split('T')[0];
+      const time = snapshotTime || getCurrentTime();
+      
+      let key = "_live_chat";
+      
+      if (title.includes("Coach")) key = "_coach_chat";
+      else if (title.includes("Trade")) key = "_trade_idea_chat";
+      else if (title.includes("HTF")) key = "_htf_chat";
+      else if (title.includes("Audit")) key = "_audit_chat";
+      
+      // If Global Coach specifically
+      if (title.includes("Global Session Assistant")) key = "_coach_global_chat";
+
+      const content = `**User:** ${userText}\n**AI:** ${aiText}`;
+      await appendJournalEntry(date, time, key, content);
+  };
+
   const handleSend = async () => {
     // Allow send if live OR if chat session exists
     if ((!input.trim() && !pendingImage) || (!chatSession.current && !isLive)) return;
@@ -285,7 +308,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
             result = await chatSession.current.sendMessage({ message: userText });
         }
         
-        setMessages(prev => [...prev, { role: 'model', text: result.text, timestamp: getCurrentTime() }]);
+        const aiText = result.text;
+        setMessages(prev => [...prev, { role: 'model', text: aiText, timestamp: getCurrentTime() }]);
+        
+        // Save interaction to Journal
+        if (userText && aiText) {
+            saveToJournal(userText, aiText);
+        }
+
     } catch (e) {
         console.error("Chat Error", e);
         setMessages(prev => [...prev, { role: 'model', text: "Connection error. Please try again.", timestamp: getCurrentTime() }]);
@@ -563,7 +593,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ isOpen, onClose, title, contextDa
                       
                       // Text Transcription
                       if (serverContent?.turnComplete && serverContent?.modelTurn?.parts?.[0]?.text) {
-                           setMessages(prev => [...prev, { role: 'model', text: serverContent.modelTurn.parts[0].text, timestamp: getCurrentTime() }]);
+                           const aiText = serverContent.modelTurn.parts[0].text;
+                           setMessages(prev => [...prev, { role: 'model', text: aiText, timestamp: getCurrentTime() }]);
+                           // Note: Live API doesn't echo user audio text cleanly in same event flow typically for journaling
+                           // But if we wanted to log AI responses from live session we could call saveToJournal here.
                       }
                   },
                   onclose: () => { 

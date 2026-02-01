@@ -25,6 +25,8 @@ interface HTFCoachProps {
   currentSnapshot: MarketSnapshot;
   isGlobalChatOpen?: boolean;
   externalHtfData?: { es: any[], nq: any[], ym: any[] } | null;
+  sessionDate: string;
+  snapshotTime: string;
 }
 
 const QUESTIONS_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-htf-questions.json";
@@ -59,7 +61,7 @@ interface AggregatedCandle {
     volume: number;
 }
 
-const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, externalHtfData }) => {
+const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot, isGlobalChatOpen, externalHtfData, sessionDate, snapshotTime }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [csvLoading, setCsvLoading] = useState(true);
@@ -387,6 +389,8 @@ const HTFCoach: React.FC<HTFCoachProps> = ({ snapshots, currentSnapshot, isGloba
         title="HTF Strategist"
         contextData={lastContext}
         initialReport={report}
+        sessionDate={sessionDate}
+        snapshotTime={snapshotTime}
       />
 
       {/* Content Area */}

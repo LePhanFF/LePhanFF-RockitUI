@@ -20,15 +20,18 @@ import {
 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
 import { API_BASE_URL } from '../utils/dataHelpers';
+import { appendJournalEntry } from '../utils/journalService';
 
 interface RockitAuditProps {
   snapshots: MarketSnapshot[];
   isGlobalChatOpen?: boolean;
+  sessionDate: string;
+  snapshotTime: string;
 }
 
 const PSYCH_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-psychology.md";
 
-const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }) => {
+const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen, sessionDate, snapshotTime }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -207,11 +210,18 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
         }
       });
 
+      let fullText = "";
       for await (const chunk of responseStream) {
         const text = chunk.text;
         if (text) {
+          fullText += text;
           setReport(prev => prev + text);
         }
+      }
+
+      // Save to Journal
+      if (fullText) {
+          await appendJournalEntry(sessionDate, snapshotTime, "_audit_rockit", fullText);
       }
 
     } catch (err: any) {
@@ -351,6 +361,8 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
         title="ROCKIT Audit"
         contextData={lastContext}
         initialReport={report}
+        sessionDate={sessionDate}
+        snapshotTime={snapshotTime}
       />
 
       {/* Content Area */}

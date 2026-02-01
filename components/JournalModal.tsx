@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, Clock, BookOpen, History, Edit3, Check, AlertCircle, Loader2, DownloadCloud, Server, Wifi, WifiOff, Sparkles, Send, Brain, Microscope, Wand2, Mic, MicOff, Volume2, MessageSquare, StopCircle, ChevronDown, ChevronUp, Maximize2, Minimize2, BrainCircuit } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Save, Clock, BookOpen, History, Edit3, Check, AlertCircle, Loader2, DownloadCloud, Server, Wifi, WifiOff, Sparkles, Send, Brain, Microscope, Wand2, Mic, MicOff, Volume2, MessageSquare, StopCircle, ChevronDown, ChevronUp, Maximize2, Minimize2, BrainCircuit, MessagesSquare } from 'lucide-react';
 import { GCS_BUCKET_BASE, API_BASE_URL, CRI_URL, PLAYBOOK_URL, TPO_ANALYSIS_URL } from '../utils/dataHelpers';
 import { GoogleGenAI, Modality } from "@google/genai";
 import { MarketSnapshot } from '../types';
+import { appendJournalEntry } from '../utils/journalService';
 
 interface JournalData {
   date: string;
@@ -56,6 +57,35 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+function decode(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDate, currentTime, currentSnapshot, allSnapshots }) => {
   const [data, setData] = useState<JournalData>(EMPTY_JOURNAL);
   const [loading, setLoading] = useState(false);
@@ -100,14 +130,36 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
   // Audio Context for TTS
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Load Journal on Open or Date Change
-  useEffect(() => {
-    if (isOpen && sessionDate) {
-      loadJournal(sessionDate);
-    }
-  }, [isOpen, sessionDate]);
+  const playAudio = async (base64Data: string) => {
+      try {
+          if (!audioContextRef.current) {
+              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+          }
+          const ctx = audioContextRef.current;
+          if (ctx.state === 'suspended') await ctx.resume();
 
-  const loadJournal = async (date: string) => {
+          const audioBuffer = await decodeAudioData(
+              decode(base64Data),
+              ctx,
+              24000,
+              1
+          );
+          
+          const source = ctx.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(ctx.destination);
+          
+          setIsPlayingAudio(true);
+          source.onended = () => setIsPlayingAudio(false);
+          source.start();
+      } catch (e) {
+          console.error("Audio playback error", e);
+          setIsPlayingAudio(false);
+      }
+  };
+
+  // Load Journal function (Wrapped in useCallback to be stable for Event Listener)
+  const loadJournal = useCallback(async (date: string) => {
     setLoading(true);
     
     // 1. Try Local Storage first
@@ -129,7 +181,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
         const cloudResponse = await res.json();
         
         // Handle both nested 'content' (from API wrapper) and flat (direct file) structures
-        // Prioritize nested 'content' if it exists and has keys
         const hasNestedContent = cloudResponse.content && Object.keys(cloudResponse.content).length > 0;
         
         const extractedDaily = hasNestedContent 
@@ -147,18 +198,14 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
             updated_at: cloudResponse.updated_at || new Date().toISOString()
         };
         
-        // Merge logic: Trust Cloud unless Local is explicitly newer
+        // Merge logic
         if (loadedData) {
             const localTime = new Date(loadedData.updated_at).getTime();
             const cloudTime = new Date(cloudJournalData.updated_at).getTime();
             
-            // Allow a small drift window (e.g. 5 seconds) where we prefer Cloud to ensure sync
             if (cloudTime >= localTime - 5000) {
                 loadedData = cloudJournalData;
-                console.log("[Journal] Synced from Cloud (Newer or Match)");
-            } else {
-                console.log("[Journal] Keeping Local (Newer unsaved changes)");
-            }
+            } 
         } else {
             loadedData = cloudJournalData;
         }
@@ -173,7 +220,35 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
       }
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Initial Load
+  useEffect(() => {
+    if (isOpen && sessionDate) {
+      loadJournal(sessionDate);
+    }
+  }, [isOpen, sessionDate, loadJournal]);
+
+  // Listen for External Updates
+  useEffect(() => {
+      const handleExternalUpdate = (event: Event) => {
+          const customEvent = event as CustomEvent;
+          // Only reload if it matches our current date
+          if (customEvent.detail?.date === sessionDate && isOpen) {
+              console.log("External update detected, reloading journal...");
+              loadJournal(sessionDate);
+              
+              // Auto-expand the key that was updated
+              if (customEvent.detail?.key) {
+                  setExpandedEntries(prev => ({ ...prev, [customEvent.detail.key]: true }));
+              }
+          }
+      };
+
+      window.addEventListener('journal-updated', handleExternalUpdate);
+      return () => window.removeEventListener('journal-updated', handleExternalUpdate);
+  }, [sessionDate, isOpen, loadJournal]);
+
 
   const handleApiCheck = async () => {
     setTestStatus('testing');
@@ -220,21 +295,17 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
     setServerErrorDetails(null);
     
     const now = new Date().toISOString();
-    
-    // Use override data if provided, otherwise use current reference state
-    // Important: Use dataRef.current when no override is provided to ensure we grab latest state even in closures
     const baseData = dataOverride || dataRef.current;
     const currentData = { ...baseData, updated_at: now };
     
-    // Update state
     setData(currentData);
 
     try {
-        // 1. Local Storage
         localStorage.setItem(`journal_${sessionDate}`, JSON.stringify(currentData));
 
-        // 2. Cloud Sync
         const token = localStorage.getItem('rockit_token');
+        const url = `${API_BASE_URL}/journal/${sessionDate}`;
+        
         const apiPayload = {
             date: sessionDate,
             content: {
@@ -243,7 +314,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
             }
         };
 
-        const response = await fetch(`${API_BASE_URL}/journal/${sessionDate}`, {
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -255,8 +326,8 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
         if (response.ok) {
             setSaveStatus('success');
         } else {
-            const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.detail || errData.message || `HTTP ${response.status}`);
+            const errText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errText.substring(0, 50)}`);
         }
     } catch (e: any) {
         console.error("Save Error:", e);
@@ -271,7 +342,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
   };
 
   const handleCloseWrapper = async () => {
-      // Auto-save on close
       await handleSave(true); 
       onClose();
   };
@@ -295,10 +365,9 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
               };
 
               mediaRecorder.onstop = async () => {
-                  const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' }); // Chrome default
-                  // Automatically submit audio after stop
+                  const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' }); 
                   await processScribeAudio(audioBlob);
-                  stream.getTracks().forEach(track => track.stop()); // Stop mic
+                  stream.getTracks().forEach(track => track.stop()); 
               };
 
               mediaRecorder.start();
@@ -340,7 +409,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
           `;
 
           const response = await ai.models.generateContent({
-              model: 'gemini-3-flash-preview', // Multimodal capable
+              model: 'gemini-3-flash-preview', 
               contents: [{ 
                   role: 'user', 
                   parts: [
@@ -351,7 +420,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
               config: { responseMimeType: "application/json" }
           });
 
-          // FIX: Access .text directly
           const result = JSON.parse(response.text || "{}");
           applyScribeResult(result);
 
@@ -394,7 +462,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
               config: { responseMimeType: "application/json" }
           });
 
-          // FIX: Access .text directly
           const result = JSON.parse(response.text || "{}");
           applyScribeResult(result);
           setScribeInput('');
@@ -411,14 +478,14 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
               const existing = data.time_slice_remarks[currentTime] || '';
               updateTimeSlice(currentTime, existing ? existing + '\n' + result.text : result.text);
           } else if (result.target_field in data.daily_remarks) {
-              const field = result.target_field as keyof typeof data.daily_remarks;
+              const field = result.target_field as keyof JournalData['daily_remarks'];
               const existing = data.daily_remarks[field] || '';
               updateDaily(field, existing ? existing + '\n' + result.text : result.text);
           }
       }
   };
 
-  // --- GEMINI DEEP ANALYSIS (Trade Ideas + TPO) ---
+  // --- GEMINI DEEP ANALYSIS (Coach Button Logic) ---
   const runCoachAnalysis = async () => {
       if (!currentSnapshot || !allSnapshots) {
           alert("Snapshot data history unavailable. Cannot run analysis.");
@@ -460,8 +527,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
           }, null, 2);
 
           // 2. Parallel Generation Requests
-          
-          // --- Trade Idea Prompt ---
           const tradeIdeaPrompt = `
             ROLE: Execution Strategist & Trading Coach.
             CONTEXT: ${marketContext}
@@ -473,7 +538,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
             - Keep it actionable.
           `;
 
-          // --- TPO Analysis Prompt ---
           const tpoAnalysisPrompt = `
             ROLE: Market Profile Specialist.
             CONTEXT: ${marketContext}
@@ -501,28 +565,15 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
           const tradeText = tradeRes.text || "Trade Analysis Failed.";
           const tpoText = tpoAnalysisRes.text || "TPO Analysis Failed.";
 
-          // 3. Update State using Ref to avoid stale closures if user typed during generation
-          const currentData = dataRef.current;
-          const tradeKey = `${currentTime}_TRADE_IDEAS`;
-          const tpoKey = `${currentTime}_TPO_TRADE_IDEAS`;
+          // 3. Centralized Save via Service (Ensures Additive)
+          await Promise.all([
+              appendJournalEntry(sessionDate, currentTime, "_TRADE_IDEAS", tradeText),
+              appendJournalEntry(sessionDate, currentTime, "_TPO_TRADE_IDEAS", tpoText)
+          ]);
 
-          const updatedData = {
-              ...currentData,
-              time_slice_remarks: {
-                  ...currentData.time_slice_remarks,
-                  [tradeKey]: tradeText,
-                  [tpoKey]: tpoText
-              }
-          };
-
-          setExpandedEntries(prev => ({ 
-              ...prev, 
-              [tradeKey]: true, 
-              [tpoKey]: true 
-          }));
-
-          // Pass the freshly merged data to save
-          await handleSave(true, updatedData);
+          // No need to manually update state here, the event listener will pick it up 
+          // or we reload manually if we want to be safe
+          await loadJournal(sessionDate);
 
       } catch (e: any) {
           console.error("Gemini Coach Analysis Error", e);
@@ -541,12 +592,10 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
       setIsPlayingAudio(false);
 
       try {
-          // 1. Fetch CRI Prompt
           const criRes = await fetch(`${CRI_URL}?cb=${Date.now()}`);
           if (!criRes.ok) throw new Error("Could not load CRI protocol.");
           const criPrompt = await criRes.text();
 
-          // 2. Prepare Data using Ref for latest state
           const currentData = dataRef.current;
           const journalContext = JSON.stringify({
               date: sessionDate,
@@ -563,7 +612,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
 
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
           
-          // Initialize Chat for subsequent conversation
           evalChatSession.current = ai.chats.create({
               model: 'gemini-3-flash-preview',
               config: { systemInstruction },
@@ -581,42 +629,23 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
             3. Assess alignment with market structure.
             
             IMPORTANT:
-            Start your response with exactly "CRI SCORE: X/10" where X is an integer from 1 to 10 based on the quality of the journal.
-            Then provide the breakdown.
+            Start your response with exactly "CRI SCORE: X/10" where X is an integer from 1 to 10.
           `;
 
-          // FIX: Use { message: string }
           const result = await evalChatSession.current.sendMessage({ message: prompt });
-          // FIX: Access .text directly
           const fullText = result.text || "Analysis generated, but text was empty.";
           setEvaluationReport(fullText);
           setEvalMessages([{ role: 'model', text: fullText }]);
 
-          // --- SAVE TO CHRONOLOGY ---
-          // Use a special key suffix to denote a Gemini entry
-          const geminiKey = `${currentTime}_GEMINI`;
-          const updatedData = {
-              ...currentData,
-              time_slice_remarks: {
-                  ...currentData.time_slice_remarks,
-                  [geminiKey]: fullText
-              }
-          };
-          
-          // Auto-expand the new entry
-          setExpandedEntries(prev => ({ ...prev, [geminiKey]: true }));
+          // Save to Journal using Service
+          await appendJournalEntry(sessionDate, currentTime, "_GEMINI", fullText);
+          await loadJournal(sessionDate);
 
-          // Update state and persist immediately
-          await handleSave(true, updatedData);
-
-          // 3. Generate Audio Summary (TLDR)
+          // Audio Summary
           const tldrPrompt = "Give me a 2-sentence audio-friendly summary of your critique. Be direct.";
-          // FIX: Use { message: string }
           const tldrResult = await evalChatSession.current.sendMessage({ message: tldrPrompt });
-          // FIX: Access .text directly
           const tldrText = tldrResult.text || "Summary unavailable.";
 
-          // 4. Call TTS
           const ttsResponse = await ai.models.generateContent({
               model: 'gemini-2.5-flash-preview-tts',
               contents: [{ parts: [{ text: tldrText }] }],
@@ -641,34 +670,6 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
       }
   };
 
-  const playAudio = async (base64Data: string) => {
-      try {
-          if (!audioContextRef.current) {
-              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-          }
-          const ctx = audioContextRef.current;
-          if (ctx.state === 'suspended') await ctx.resume();
-
-          // Decode base64 to array buffer then decode audio data
-          const binaryString = atob(base64Data);
-          const len = binaryString.length;
-          const bytes = new Uint8Array(len);
-          for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
-          
-          // TTS model usually returns WAV/MP3 container, decodeAudioData handles it
-          const audioBuffer = await ctx.decodeAudioData(bytes.buffer);
-          
-          const source = ctx.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(ctx.destination);
-          source.start(0);
-          setIsPlayingAudio(true);
-          source.onended = () => setIsPlayingAudio(false);
-      } catch (e) {
-          console.error("Audio Playback Error", e);
-      }
-  };
-
   const handleEvalChatSubmit = async () => {
       if (!evalInput.trim() || !evalChatSession.current) return;
       
@@ -678,9 +679,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
       setIsEvalChatting(true);
 
       try {
-          // FIX: Use { message: string }
           const result = await evalChatSession.current.sendMessage({ message: userText });
-          // FIX: Access .text directly
           const responseText = result.text || "No response received.";
           setEvalMessages(prev => [...prev, { role: 'model', text: responseText }]);
       } catch (e) {
@@ -946,21 +945,23 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                             {/* Sort: Latest Time First. */}
                             {Object.entries(data.time_slice_remarks)
                                 .sort((a, b) => b[0].localeCompare(a[0])) // Newest first
-                                .map(([timeKey, note]) => {
+                                .map(([timeKey, note]: [string, string]) => {
                                     // Determine entry type
                                     const isGeminiCRI = timeKey.includes('_GEMINI');
                                     const isTradeIdea = timeKey.includes('_TRADE_IDEAS') && !timeKey.includes('_TPO_');
-                                    const isTPO = timeKey.includes('_TPO_TRADE_IDEAS');
+                                    const isTPO = timeKey.includes('_TPO_TRADE_IDEAS') || timeKey.includes('_tpo_analyze');
+                                    const isCoach = timeKey.includes('_coach_global');
+                                    const isChat = timeKey.includes('_chat'); // Detect Chat Interactions
                                     
                                     const displayTime = timeKey.split('_')[0]; // Extract time prefix
-                                    const isActive = displayTime === currentTime && !isGeminiCRI && !isTradeIdea && !isTPO; 
+                                    const isActive = displayTime === currentTime && !isGeminiCRI && !isTradeIdea && !isTPO && !isCoach && !isChat; 
                                     
                                     const isExpanded = expandedEntries[timeKey] || isActive;
                                     
                                     // Style Logic
                                     let containerStyle = 'border-slate-800 bg-slate-900 hover:border-slate-600';
                                     let badgeStyle = 'text-indigo-400 bg-indigo-500/10';
-                                    let labelText = isGeminiCRI ? 'GEMINI CRI' : isTradeIdea ? 'TRADE PLAN' : isTPO ? 'TPO STRUCT' : 'USER';
+                                    let labelText = isGeminiCRI ? 'GEMINI CRI' : isTradeIdea ? 'TRADE PLAN' : isTPO ? 'TPO STRUCT' : isCoach ? 'COACH' : isChat ? 'CHAT LOG' : 'USER';
                                     let labelColor = 'text-indigo-400';
                                     let score = null;
 
@@ -972,7 +973,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                                     } else if (isGeminiCRI) {
                                         const scoreStyles = getScoreColor(note);
                                         containerStyle = `${scoreStyles.border} ${scoreStyles.bg}`;
-                                        badgeStyle = scoreStyles.badge; // Assuming this contains full class list
+                                        badgeStyle = scoreStyles.badge; 
                                         labelColor = scoreStyles.text;
                                         score = extractScore(note);
                                     } else if (isTradeIdea) {
@@ -983,6 +984,14 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                                         containerStyle = 'border-purple-500/30 bg-purple-500/5';
                                         badgeStyle = 'text-purple-400 bg-purple-500/10';
                                         labelColor = 'text-purple-400';
+                                    } else if (isCoach) {
+                                        containerStyle = 'border-emerald-500/30 bg-emerald-500/5';
+                                        badgeStyle = 'text-emerald-400 bg-emerald-500/10';
+                                        labelColor = 'text-emerald-400';
+                                    } else if (isChat) {
+                                        containerStyle = 'border-slate-700/50 bg-slate-800/30 hover:bg-slate-800/50';
+                                        badgeStyle = 'text-sky-400 bg-sky-500/10';
+                                        labelColor = 'text-sky-400';
                                     }
 
                                     return (
@@ -990,7 +999,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                                             <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => toggleExpand(timeKey)}>
                                                 <div className="flex items-center gap-3">
                                                     <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded flex items-center gap-2 ${badgeStyle}`}>
-                                                        {(isGeminiCRI || isTradeIdea || isTPO) && <Brain className="w-3 h-3" />}
+                                                        {isChat ? <MessagesSquare className="w-3 h-3" /> : (isGeminiCRI || isTradeIdea || isTPO || isCoach) && <Brain className="w-3 h-3" />}
                                                         {displayTime}
                                                     </span>
                                                     {score && (
@@ -1010,7 +1019,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                                             {isExpanded && (
                                                 <div className="px-3 pb-3 animate-in slide-in-from-top-2 duration-200">
                                                     <textarea
-                                                        className={`w-full bg-transparent text-base outline-none resize-none h-auto min-h-[80px] font-medium p-2 rounded-lg leading-relaxed ${isGeminiCRI || isTradeIdea || isTPO ? 'text-slate-200 bg-black/20' : 'text-slate-300'}`}
+                                                        className={`w-full bg-transparent text-base outline-none resize-none h-auto min-h-[80px] font-medium p-2 rounded-lg leading-relaxed ${isGeminiCRI || isTradeIdea || isTPO || isCoach || isChat ? 'text-slate-200 bg-black/20' : 'text-slate-300'}`}
                                                         value={note}
                                                         onChange={(e) => updateTimeSlice(timeKey, e.target.value)}
                                                         rows={note.split('\n').length > 5 ? 10 : 5}

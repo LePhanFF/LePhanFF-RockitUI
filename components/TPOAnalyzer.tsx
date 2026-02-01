@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { Sparkles, Brain, AlertTriangle, ArrowLeft, Copy, ClipboardCheck } from 'lucide-react';
 import { TPORow } from '../utils/tpoHelpers';
+import { appendJournalEntry } from '../utils/journalService';
 
 interface TPOAnalyzerProps {
   tpo30m: { tpoRows: TPORow[], minPrice: number, maxPrice: number };
@@ -11,9 +12,10 @@ interface TPOAnalyzerProps {
   currentPrice: number;
   promptTemplate?: string;
   onBack: () => void;
+  sessionDate: string;
 }
 
-const TPOAnalyzer: React.FC<TPOAnalyzerProps> = ({ tpo30m, tpo5m, snapshotTime, currentPrice, promptTemplate, onBack }) => {
+const TPOAnalyzer: React.FC<TPOAnalyzerProps> = ({ tpo30m, tpo5m, snapshotTime, currentPrice, promptTemplate, onBack, sessionDate }) => {
   const [report, setReport] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,8 +69,17 @@ const TPOAnalyzer: React.FC<TPOAnalyzerProps> = ({ tpo30m, tpo5m, snapshotTime, 
             config: { temperature: 0.4 }
         });
 
+        let fullText = "";
         for await (const chunk of responseStream) {
-            if (chunk.text) setReport(prev => prev + chunk.text);
+            if (chunk.text) {
+                fullText += chunk.text;
+                setReport(prev => prev + chunk.text);
+            }
+        }
+
+        // --- SAVE TO JOURNAL ---
+        if (fullText && sessionDate) {
+            await appendJournalEntry(sessionDate, snapshotTime, "_tpo_analyze", fullText);
         }
 
     } catch (err: any) {

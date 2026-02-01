@@ -12,9 +12,10 @@ interface TPOTabProps {
   snapshotTime: string;
   allSnapshots: any[];
   tpoAnalysisContent?: string;
+  sessionDate: string;
 }
 
-const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshots, tpoAnalysisContent }) => {
+const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshots, tpoAnalysisContent, sessionDate }) => {
   const [timeframe, setTimeframe] = useState<'30m' | '5m'>('30m');
   const [viewMode, setViewMode] = useState<'chart' | 'analyze'>('chart');
   const [copied, setCopied] = useState(false);
@@ -119,59 +120,61 @@ const TPOTab: React.FC<TPOTabProps> = ({ tpo, vol, ib, snapshotTime, allSnapshot
             }, 'image/png');
         };
         img.src = url;
-    } catch (e) { console.error("Snapshot error:", e); }
+    } catch (e) { console.error("Snapshot error", e); }
   };
 
   if (viewMode === 'analyze' && analyzerData) {
       return (
           <TPOAnalyzer 
-             tpo30m={analyzerData.tpo30m}
-             tpo5m={analyzerData.tpo5m}
-             snapshotTime={snapshotTime}
-             currentPrice={Number(ib?.current_close)}
-             promptTemplate={tpoAnalysisContent}
-             onBack={() => setViewMode('chart')}
+            tpo30m={analyzerData.tpo30m}
+            tpo5m={analyzerData.tpo5m}
+            snapshotTime={snapshotTime}
+            currentPrice={ib?.current_close || 0}
+            promptTemplate={tpoAnalysisContent}
+            onBack={() => setViewMode('chart')}
+            sessionDate={sessionDate}
           />
       );
   }
 
   return (
-    <div className="h-full flex flex-col animate-in fade-in duration-500 gap-4 relative">
-        {/* Toolbar */}
-        <div className="flex justify-between items-center bg-slate-900/60 p-2 rounded-xl border border-slate-800 shrink-0">
-             <div className="flex gap-2">
-                <button onClick={() => setTimeframe('5m')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${timeframe === '5m' ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg' : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300'}`}>5m</button>
-                <button onClick={() => setTimeframe('30m')} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all border ${timeframe === '30m' ? 'bg-indigo-500 text-white border-indigo-400 shadow-lg' : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300'}`}>30m</button>
-            </div>
-
-            <div className="flex gap-2">
-                <button 
-                    onClick={() => setViewMode('analyze')}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-black uppercase transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] border border-indigo-500"
-                >
-                    <Brain className="w-3.5 h-3.5" />
-                    <span>Analyze</span>
+    <div className="h-full flex flex-col relative animate-in fade-in duration-500">
+        <div className="absolute top-4 left-4 z-50 flex gap-2">
+            <div className="bg-slate-900/90 p-1 rounded-lg border border-slate-700 flex items-center shadow-xl backdrop-blur-md">
+                <button onClick={() => setViewMode('chart')} className={`p-2 rounded-md transition-all ${viewMode === 'chart' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`} title="Interactive Chart">
+                    <AlignJustify className="w-4 h-4" />
                 </button>
-
-                <div className="w-px h-6 bg-slate-800 mx-1"></div>
-
-                <button onClick={handleCopyImage} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-[10px] font-bold uppercase transition-all ${imageCopied ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-slate-400 bg-slate-950 border-slate-800 hover:text-white hover:border-slate-600'}`}>
-                    {imageCopied ? <Check className="w-3.5 h-3.5" /> : <Camera className="w-3.5 h-3.5" />}
-                </button>
-                <button onClick={handleCopy} className={`p-1.5 rounded-lg border transition-all ${copied ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' : 'text-slate-400 bg-slate-950 border-slate-800 hover:text-white hover:border-slate-600'}`}>
-                    {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <button onClick={() => setViewMode('analyze')} className={`p-2 rounded-md transition-all ${viewMode === 'analyze' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`} title="AI Deep Scan">
+                    <Brain className="w-4 h-4" />
                 </button>
             </div>
+
+            {viewMode === 'chart' && (
+                <div className="bg-slate-900/90 p-1 rounded-lg border border-slate-700 flex items-center shadow-xl backdrop-blur-md">
+                    <button onClick={() => setTimeframe('30m')} className={`px-3 py-1.5 rounded-md text-[10px] font-black transition-all ${timeframe === '30m' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>30m</button>
+                    <button onClick={() => setTimeframe('5m')} className={`px-3 py-1.5 rounded-md text-[10px] font-black transition-all ${timeframe === '5m' ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}>5m</button>
+                </div>
+            )}
         </div>
 
-        {/* TPO Chart Container */}
-        <div ref={chartContainerRef} className="flex-1 min-h-[400px] bg-slate-900/40 border border-slate-800 rounded-[2rem] overflow-hidden shadow-inner p-1 relative">
+        {viewMode === 'chart' && (
+            <div className="absolute top-4 right-4 z-50 flex gap-2">
+                 <button onClick={handleCopyImage} className={`p-2 rounded-lg bg-slate-900/90 border border-slate-700 backdrop-blur-md shadow-xl transition-all ${imageCopied ? 'text-emerald-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`} title="Copy Chart Image">
+                    {imageCopied ? <Check className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                </button>
+                <button onClick={handleCopy} className={`p-2 rounded-lg bg-slate-900/90 border border-slate-700 backdrop-blur-md shadow-xl transition-all ${copied ? 'text-emerald-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`} title="Copy Stats">
+                    {copied ? <ClipboardCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </button>
+            </div>
+        )}
+
+        <div className="flex-1 bg-slate-900/40 rounded-3xl overflow-hidden border border-slate-800 relative shadow-inner" ref={chartContainerRef}>
             <TPOChart 
                 tpoProfile={tpo}
                 volumeProfile={vol?.current_session}
                 ibLevels={{ high: ib?.ib_high, low: ib?.ib_low }}
                 history={historyUpToNow}
-                currentPrice={Number(ib?.current_close)}
+                currentPrice={ib?.current_close || 0}
                 timeframe={timeframe}
             />
         </div>
