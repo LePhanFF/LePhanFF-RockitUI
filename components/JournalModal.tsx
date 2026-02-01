@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, Clock, BookOpen, History, Edit3, Check, AlertCircle, Loader2, DownloadCloud, Server, Wifi, WifiOff, Sparkles, Send, Brain, Microscope, Wand2, Mic, MicOff, Volume2, MessageSquare, StopCircle, ChevronDown, ChevronUp, Maximize2, Minimize2 } from 'lucide-react';
-import { GCS_BUCKET_BASE, API_BASE_URL, CRI_URL } from '../utils/dataHelpers';
+import { X, Save, Clock, BookOpen, History, Edit3, Check, AlertCircle, Loader2, DownloadCloud, Server, Wifi, WifiOff, Sparkles, Send, Brain, Microscope, Wand2, Mic, MicOff, Volume2, MessageSquare, StopCircle, ChevronDown, ChevronUp, Maximize2, Minimize2, BrainCircuit } from 'lucide-react';
+import { GCS_BUCKET_BASE, API_BASE_URL, CRI_URL, PLAYBOOK_URL, TPO_ANALYSIS_URL } from '../utils/dataHelpers';
 import { GoogleGenAI, Modality } from "@google/genai";
+import { MarketSnapshot } from '../types';
 
 interface JournalData {
   date: string;
@@ -23,6 +24,8 @@ interface JournalModalProps {
   onClose: () => void;
   sessionDate: string;
   currentTime: string;
+  currentSnapshot?: MarketSnapshot;
+  allSnapshots?: MarketSnapshot[];
 }
 
 const EMPTY_JOURNAL: JournalData = {
@@ -53,13 +56,19 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDate, currentTime }) => {
+const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDate, currentTime, currentSnapshot, allSnapshots }) => {
   const [data, setData] = useState<JournalData>(EMPTY_JOURNAL);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [serverErrorDetails, setServerErrorDetails] = useState<string | null>(null);
   
+  // Use a Ref to track latest data state for async operations (prevents stale closures)
+  const dataRef = useRef<JournalData>(data);
+  useEffect(() => {
+      dataRef.current = data;
+  }, [data]);
+
   // Test Connection State
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
@@ -72,8 +81,9 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
-  // Evaluation State
+  // Evaluation & Analysis State
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [evaluationReport, setEvaluationReport] = useState<string | null>(null);
   const [showEvaluation, setShowEvaluation] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -101,8 +111,8 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
     setLoading(true);
     
     // 1. Try Local Storage first
-    const localData = localStorage.getItem(`journal_${date}`);
-    let loadedData: JournalData | null = localData ? JSON.parse(localData) : null;
+    const localDataStr = localStorage.getItem(`journal_${date}`);
+    let loadedData: JournalData | null = localDataStr ? JSON.parse(localDataStr) : null;
 
     try {
       // 2. Try Fetching from API
@@ -117,21 +127,37 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
 
       if (res.ok) {
         const cloudResponse = await res.json();
-        const cloudContent = cloudResponse.content || {};
         
+        // Handle both nested 'content' (from API wrapper) and flat (direct file) structures
+        // Prioritize nested 'content' if it exists and has keys
+        const hasNestedContent = cloudResponse.content && Object.keys(cloudResponse.content).length > 0;
+        
+        const extractedDaily = hasNestedContent 
+            ? cloudResponse.content.daily_remarks 
+            : cloudResponse.daily_remarks;
+            
+        const extractedTimeSlice = hasNestedContent 
+            ? cloudResponse.content.time_slice_remarks 
+            : cloudResponse.time_slice_remarks;
+
         const cloudJournalData: JournalData = {
-            date: cloudResponse.date,
-            daily_remarks: cloudContent.daily_remarks || EMPTY_JOURNAL.daily_remarks,
-            time_slice_remarks: cloudContent.time_slice_remarks || {},
+            date: cloudResponse.date || date,
+            daily_remarks: { ...EMPTY_JOURNAL.daily_remarks, ...extractedDaily },
+            time_slice_remarks: extractedTimeSlice || {},
             updated_at: cloudResponse.updated_at || new Date().toISOString()
         };
         
-        // Merge logic
+        // Merge logic: Trust Cloud unless Local is explicitly newer
         if (loadedData) {
             const localTime = new Date(loadedData.updated_at).getTime();
             const cloudTime = new Date(cloudJournalData.updated_at).getTime();
-            if (cloudTime > localTime) {
+            
+            // Allow a small drift window (e.g. 5 seconds) where we prefer Cloud to ensure sync
+            if (cloudTime >= localTime - 5000) {
                 loadedData = cloudJournalData;
+                console.log("[Journal] Synced from Cloud (Newer or Match)");
+            } else {
+                console.log("[Journal] Keeping Local (Newer unsaved changes)");
             }
         } else {
             loadedData = cloudJournalData;
@@ -195,17 +221,13 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
     
     const now = new Date().toISOString();
     
-    // Use override data if provided, otherwise use current state
-    const baseData = dataOverride || data;
+    // Use override data if provided, otherwise use current reference state
+    // Important: Use dataRef.current when no override is provided to ensure we grab latest state even in closures
+    const baseData = dataOverride || dataRef.current;
     const currentData = { ...baseData, updated_at: now };
     
-    // Update state if we are saving new data
-    if (dataOverride) {
-        setData(currentData);
-    } else {
-        // If just saving current state, update the timestamp in state
-        setData(prev => ({ ...prev, updated_at: now }));
-    }
+    // Update state
+    setData(currentData);
 
     try {
         // 1. Local Storage
@@ -237,6 +259,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
             throw new Error(errData.detail || errData.message || `HTTP ${response.status}`);
         }
     } catch (e: any) {
+        console.error("Save Error:", e);
         setSaveStatus('error');
         setServerErrorDetails(e.message);
     } finally {
@@ -395,6 +418,120 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
       }
   };
 
+  // --- GEMINI DEEP ANALYSIS (Trade Ideas + TPO) ---
+  const runCoachAnalysis = async () => {
+      if (!currentSnapshot || !allSnapshots) {
+          alert("Snapshot data history unavailable. Cannot run analysis.");
+          return;
+      }
+      
+      setIsAnalyzing(true);
+      
+      try {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          
+          // 1. Fetch Contexts
+          const [playbookRes, tpoRes] = await Promise.all([
+              fetch(`${PLAYBOOK_URL}?cb=${Date.now()}`).then(r => r.text()),
+              fetch(`${TPO_ANALYSIS_URL}?cb=${Date.now()}`).then(r => r.text())
+          ]);
+
+          // Build Historical Sequence (09:30 to Current Time)
+          const sessionHistory = allSnapshots
+            .filter(s => s.input.current_et_time >= "09:30" && s.input.current_et_time <= currentTime)
+            .map(s => ({
+                time: s.input.current_et_time,
+                price: s.input.intraday.ib.current_close,
+                vwap: s.input.intraday.ib.current_vwap,
+                tpo_shape: s.input.intraday.tpo_profile.tpo_shape,
+                vol: s.input.intraday.ib.current_volume,
+                bias: s.decoded?.bias
+            }));
+
+          const marketContext = JSON.stringify({
+              current_time: currentTime,
+              current_state: {
+                  price: currentSnapshot.input.intraday.ib.current_close,
+                  tpo: currentSnapshot.input.intraday.tpo_profile,
+                  vol: currentSnapshot.input.intraday.volume_profile.current_session,
+                  bias: currentSnapshot.decoded?.bias
+              },
+              session_flow: sessionHistory
+          }, null, 2);
+
+          // 2. Parallel Generation Requests
+          
+          // --- Trade Idea Prompt ---
+          const tradeIdeaPrompt = `
+            ROLE: Execution Strategist & Trading Coach.
+            CONTEXT: ${marketContext}
+            PLAYBOOK RULES: ${playbookRes.substring(0, 5000)}
+            
+            TASK: Generate a concise Trade Plan (Markdown) for ${currentTime}, considering the FULL FLOW of the session from 09:30 AM.
+            - Identify Primary & Hedge setups based on how the session has evolved.
+            - Specify Entry, Stop, Target levels.
+            - Keep it actionable.
+          `;
+
+          // --- TPO Analysis Prompt ---
+          const tpoAnalysisPrompt = `
+            ROLE: Market Profile Specialist.
+            CONTEXT: ${marketContext}
+            TPO RULES: ${tpoRes.substring(0, 5000)}
+            
+            TASK: Analyze the TPO Structure (Markdown) for ${currentTime}, considering the SEQUENCE of development since 09:30 AM.
+            - Analyze the evolution of the shape (e.g. from b-shape to P-shape).
+            - Comment on Value Area migration over time.
+            - Identify structural anomalies (poor highs/lows) that persist.
+          `;
+
+          const [tradeRes, tpoAnalysisRes] = await Promise.all([
+              ai.models.generateContent({
+                  model: 'gemini-3-flash-preview',
+                  contents: [{ role: 'user', parts: [{ text: tradeIdeaPrompt }] }],
+                  config: { temperature: 0.4 }
+              }),
+              ai.models.generateContent({
+                  model: 'gemini-3-flash-preview',
+                  contents: [{ role: 'user', parts: [{ text: tpoAnalysisPrompt }] }],
+                  config: { temperature: 0.3 }
+              })
+          ]);
+
+          const tradeText = tradeRes.text || "Trade Analysis Failed.";
+          const tpoText = tpoAnalysisRes.text || "TPO Analysis Failed.";
+
+          // 3. Update State using Ref to avoid stale closures if user typed during generation
+          const currentData = dataRef.current;
+          const tradeKey = `${currentTime}_TRADE_IDEAS`;
+          const tpoKey = `${currentTime}_TPO_TRADE_IDEAS`;
+
+          const updatedData = {
+              ...currentData,
+              time_slice_remarks: {
+                  ...currentData.time_slice_remarks,
+                  [tradeKey]: tradeText,
+                  [tpoKey]: tpoText
+              }
+          };
+
+          setExpandedEntries(prev => ({ 
+              ...prev, 
+              [tradeKey]: true, 
+              [tpoKey]: true 
+          }));
+
+          // Pass the freshly merged data to save
+          await handleSave(true, updatedData);
+
+      } catch (e: any) {
+          console.error("Gemini Coach Analysis Error", e);
+          alert(`Analysis Failed: ${e.message}`);
+      } finally {
+          setIsAnalyzing(false);
+      }
+  };
+
   // --- CRITICAL EVALUATION LOGIC ---
   const runCritique = async () => {
       setIsEvaluating(true);
@@ -409,11 +546,12 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
           if (!criRes.ok) throw new Error("Could not load CRI protocol.");
           const criPrompt = await criRes.text();
 
-          // 2. Prepare Data
+          // 2. Prepare Data using Ref for latest state
+          const currentData = dataRef.current;
           const journalContext = JSON.stringify({
               date: sessionDate,
-              notes: data.daily_remarks,
-              chronology: data.time_slice_remarks
+              notes: currentData.daily_remarks,
+              chronology: currentData.time_slice_remarks
           }, null, 2);
 
           const systemInstruction = `
@@ -458,9 +596,9 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
           // Use a special key suffix to denote a Gemini entry
           const geminiKey = `${currentTime}_GEMINI`;
           const updatedData = {
-              ...data,
+              ...currentData,
               time_slice_remarks: {
-                  ...data.time_slice_remarks,
+                  ...currentData.time_slice_remarks,
                   [geminiKey]: fullText
               }
           };
@@ -632,6 +770,17 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                         <span className="text-[10px] font-black uppercase tracking-wider hidden sm:inline">Evaluate</span>
                     </button>
 
+                    {/* COACH BUTTON */}
+                    <button 
+                        onClick={runCoachAnalysis}
+                        disabled={isAnalyzing}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-indigo-900/40 text-indigo-300 border-indigo-500/50 hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50"
+                        title="Generate Trade Ideas & TPO Analysis for current time using historical session data"
+                    >
+                        {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />}
+                        <span className="text-[10px] font-black uppercase tracking-wider hidden sm:inline">Coach</span>
+                    </button>
+
                     <div className="w-px h-6 bg-slate-800 mx-1"></div>
 
                     {/* Status Indicators */}
@@ -798,39 +947,60 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                             {Object.entries(data.time_slice_remarks)
                                 .sort((a, b) => b[0].localeCompare(a[0])) // Newest first
                                 .map(([timeKey, note]) => {
-                                    const isGemini = timeKey.includes('_GEMINI');
-                                    const displayTime = timeKey.replace('_GEMINI', '');
-                                    const isActive = displayTime === currentTime && !isGemini; 
+                                    // Determine entry type
+                                    const isGeminiCRI = timeKey.includes('_GEMINI');
+                                    const isTradeIdea = timeKey.includes('_TRADE_IDEAS') && !timeKey.includes('_TPO_');
+                                    const isTPO = timeKey.includes('_TPO_TRADE_IDEAS');
+                                    
+                                    const displayTime = timeKey.split('_')[0]; // Extract time prefix
+                                    const isActive = displayTime === currentTime && !isGeminiCRI && !isTradeIdea && !isTPO; 
                                     
                                     const isExpanded = expandedEntries[timeKey] || isActive;
-                                    const scoreStyles = isGemini ? getScoreColor(note) : { border: 'border-slate-800', bg: 'bg-slate-900', text: 'text-indigo-400', badge: '' };
-                                    const score = isGemini ? extractScore(note) : null;
+                                    
+                                    // Style Logic
+                                    let containerStyle = 'border-slate-800 bg-slate-900 hover:border-slate-600';
+                                    let badgeStyle = 'text-indigo-400 bg-indigo-500/10';
+                                    let labelText = isGeminiCRI ? 'GEMINI CRI' : isTradeIdea ? 'TRADE PLAN' : isTPO ? 'TPO STRUCT' : 'USER';
+                                    let labelColor = 'text-indigo-400';
+                                    let score = null;
+
+                                    if (isActive) {
+                                        containerStyle = 'border-amber-500/30 bg-amber-500/5';
+                                        badgeStyle = 'text-amber-400 bg-amber-500/10';
+                                        labelColor = 'text-amber-500';
+                                        labelText = 'ACTIVE';
+                                    } else if (isGeminiCRI) {
+                                        const scoreStyles = getScoreColor(note);
+                                        containerStyle = `${scoreStyles.border} ${scoreStyles.bg}`;
+                                        badgeStyle = scoreStyles.badge; // Assuming this contains full class list
+                                        labelColor = scoreStyles.text;
+                                        score = extractScore(note);
+                                    } else if (isTradeIdea) {
+                                        containerStyle = 'border-cyan-500/30 bg-cyan-500/5';
+                                        badgeStyle = 'text-cyan-400 bg-cyan-500/10';
+                                        labelColor = 'text-cyan-400';
+                                    } else if (isTPO) {
+                                        containerStyle = 'border-purple-500/30 bg-purple-500/5';
+                                        badgeStyle = 'text-purple-400 bg-purple-500/10';
+                                        labelColor = 'text-purple-400';
+                                    }
 
                                     return (
-                                        <div key={timeKey} className={`group relative rounded-xl border transition-all ${
-                                            isActive ? 'border-amber-500/30 bg-amber-500/5' : 
-                                            isGemini ? `${scoreStyles.border} ${scoreStyles.bg}` :
-                                            'border-slate-800 bg-slate-900 hover:border-slate-600'
-                                        }`}>
+                                        <div key={timeKey} className={`group relative rounded-xl border transition-all ${containerStyle}`}>
                                             <div className="flex items-center justify-between p-3 cursor-pointer" onClick={() => toggleExpand(timeKey)}>
                                                 <div className="flex items-center gap-3">
-                                                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded flex items-center gap-2 ${
-                                                        isActive ? 'text-amber-400 bg-amber-500/10' : 
-                                                        isGemini ? scoreStyles.text + ' ' + scoreStyles.badge.split(' ')[0] :
-                                                        'text-indigo-400 bg-indigo-500/10'
-                                                    }`}>
-                                                        {isGemini && <Brain className="w-3 h-3" />}
+                                                    <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded flex items-center gap-2 ${badgeStyle}`}>
+                                                        {(isGeminiCRI || isTradeIdea || isTPO) && <Brain className="w-3 h-3" />}
                                                         {displayTime}
                                                     </span>
                                                     {score && (
-                                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${scoreStyles.badge} border-current opacity-80`}>
+                                                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border border-current opacity-80 ${badgeStyle}`}>
                                                             {score}/10
                                                         </span>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    {isActive && <span className="text-[8px] uppercase font-black text-amber-500 tracking-wider">Active</span>}
-                                                    {isGemini && <span className={`text-[8px] uppercase font-black tracking-wider ${scoreStyles.text}`}>GEMINI</span>}
+                                                    <span className={`text-[8px] uppercase font-black tracking-wider ${labelColor}`}>{labelText}</span>
                                                     <button className="p-1 text-slate-500 hover:text-white transition-colors">
                                                         {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                                                     </button>
@@ -840,7 +1010,7 @@ const JournalModal: React.FC<JournalModalProps> = ({ isOpen, onClose, sessionDat
                                             {isExpanded && (
                                                 <div className="px-3 pb-3 animate-in slide-in-from-top-2 duration-200">
                                                     <textarea
-                                                        className={`w-full bg-transparent text-base outline-none resize-none h-auto min-h-[80px] font-medium p-2 rounded-lg leading-relaxed ${isGemini ? 'text-slate-200 bg-black/20' : 'text-slate-300'}`}
+                                                        className={`w-full bg-transparent text-base outline-none resize-none h-auto min-h-[80px] font-medium p-2 rounded-lg leading-relaxed ${isGeminiCRI || isTradeIdea || isTPO ? 'text-slate-200 bg-black/20' : 'text-slate-300'}`}
                                                         value={note}
                                                         onChange={(e) => updateTimeSlice(timeKey, e.target.value)}
                                                         rows={note.split('\n').length > 5 ? 10 : 5}

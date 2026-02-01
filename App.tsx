@@ -457,6 +457,8 @@ const App: React.FC = () => {
         onClose={() => setIsJournalOpen(false)}
         sessionDate={currentSnapshot?.input?.session_date || ''}
         currentTime={currentSnapshot?.input?.current_et_time || ''}
+        currentSnapshot={currentSnapshot} // Pass full snapshot for deep analysis
+        allSnapshots={processedSnapshots} // Pass history for coach
       />
 
       <AppHeader 
