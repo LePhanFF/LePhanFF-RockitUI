@@ -5,9 +5,6 @@ import { GoogleGenAI } from "@google/genai";
 import { 
   Rocket, 
   AlertTriangle, 
-  FileText, 
-  Clock, 
-  Brain, 
   Quote, 
   FileJson,
   CheckCircle2,
@@ -19,10 +16,10 @@ import {
   Server,
   RefreshCw,
   Wifi,
-  WifiOff,
   Laptop
 } from 'lucide-react';
 import ChatPanel from './ChatPanel';
+import { API_BASE_URL } from '../utils/dataHelpers';
 
 interface RockitAuditProps {
   snapshots: MarketSnapshot[];
@@ -66,33 +63,40 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
     setServerMessage("Handshaking...");
     
     try {
-      // Attempt to fetch from backend
-      // Increased timeout to 5000ms to handle Cloud Run cold starts
+      // Attempt to fetch from external backend using relative proxy path /api
+      // Try /welcome first as per requirements
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      const res = await fetch('/api/hello', {
+      const res = await fetch(`${API_BASE_URL}/welcome`, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
         signal: controller.signal
       });
       clearTimeout(timeoutId);
 
-      const contentType = res.headers.get("content-type");
-      if (!res.ok || !contentType || !contentType.includes("application/json")) {
+      // Welcome endpoint might return JSON or Text
+      if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+              const data = await res.json();
+              setServerMessage(data.message || "Connected to Rockit API");
+              setSessionId(data.sessionId || "SESSION-ACTIVE");
+          } else {
+              const text = await res.text();
+              setServerMessage(text.substring(0, 50) || "Connected");
+              setSessionId("WEB-SESSION");
+          }
+          setServerStatus('live');
+      } else {
          throw new Error(`Backend Unavailable (HTTP ${res.status})`);
       }
-
-      const data = await res.json();
-      setServerStatus('live');
-      setServerMessage(data.message);
-      setSessionId(data.sessionId);
 
     } catch (e: any) {
       console.warn("Server Check Failed (Switching to Simulation):", e);
       // Fallback simulation
       setServerStatus('simulated');
-      setServerMessage("Browser-Side Demo Mode Active.");
+      setServerMessage("Backend Unreachable - Offline Mode");
       setSessionId("local-" + Math.random().toString(36).substring(2, 10));
     }
   };
@@ -326,7 +330,7 @@ const RockitAudit: React.FC<RockitAuditProps> = ({ snapshots, isGlobalChatOpen }
                   {serverStatus === 'idle' && "Ready"}
                   {serverStatus === 'checking' && "Connecting..."}
                   {serverStatus === 'live' && "System Online"}
-                  {serverStatus === 'simulated' && "Demo Mode"}
+                  {serverStatus === 'simulated' && "Offline"}
               </span>
           </div>
           

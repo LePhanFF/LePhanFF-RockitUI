@@ -1,9 +1,12 @@
 
 import { DecodedOutput } from '../types';
 
+// Use absolute URL directly. Ensure the backend supports CORS.
+export const API_BASE_URL = "https://rockitapi-292122978848.us-west1.run.app";
 export const GCS_BUCKET_BASE = "https://storage.googleapis.com/rockit-data"; 
 export const PLAYBOOK_URL = "https://storage.googleapis.com/rockit-data/inference/playbooks.md";
 export const PSYCH_URL = "https://storage.googleapis.com/rockit-data/inference/gemini-psychology.md";
+export const CRI_URL = "https://storage.googleapis.com/rockit-data/inference/cri.md";
 export const TPO_ANALYSIS_URL = "https://storage.googleapis.com/rockit-data/inference/tpo-analysis.md";
 
 // Data Sources - Google Drive Export Links

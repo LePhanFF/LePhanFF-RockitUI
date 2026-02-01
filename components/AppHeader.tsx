@@ -1,6 +1,7 @@
 
 import React from 'react';
-import { LayoutDashboard, Pause, Timer, RefreshCw, ArrowUpRight, ArrowDownRight, Activity, Info, Cpu, Waypoints, Globe, BarChartHorizontal, Grid3X3, Brain, Target, MessageCircle, Link, Check, Palette, Clock, User, LogOut, AlertCircle, Rocket, Lightbulb, GraduationCap, Map, Code, BookText } from 'lucide-react';
+import { LayoutDashboard, Pause, Timer, RefreshCw, ArrowUpRight, ArrowDownRight, Activity, Info, Cpu, Waypoints, Globe, BarChartHorizontal, Grid3X3, Brain, Target, MessageCircle, Link, Check, Palette, Clock, User, LogOut, AlertCircle, Rocket, Lightbulb, GraduationCap, Map, Code, BookText, Server } from 'lucide-react';
+import { API_BASE_URL } from '../utils/dataHelpers';
 
 interface AppHeaderProps {
   currentSnapshot: any;

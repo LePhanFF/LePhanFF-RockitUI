@@ -19,6 +19,34 @@ const App: React.FC = () => {
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Auto-Login Check on Mount
+  useEffect(() => {
+    const checkAuth = () => {
+        const token = localStorage.getItem('rockit_token');
+        const expiryStr = localStorage.getItem('rockit_token_expiry');
+        
+        if (token) {
+            if (expiryStr) {
+                const expiry = parseInt(expiryStr, 10);
+                if (Date.now() < expiry) {
+                    console.log("[Auth] Token valid. Auto-logging in.");
+                    setIsAuthenticated(true);
+                } else {
+                    console.log("[Auth] Token expired. Clearing.");
+                    localStorage.removeItem('rockit_token');
+                    localStorage.removeItem('rockit_token_expiry');
+                    setIsAuthenticated(false);
+                }
+            } else {
+                // If no expiry stored but token exists, treat as valid for legacy or assume user will re-auth on 401
+                console.log("[Auth] Legacy token found. Auto-logging in.");
+                setIsAuthenticated(true);
+            }
+        }
+    };
+    checkAuth();
+  }, []);
+
   // App Data State
   const [snapshots, setSnapshots] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -82,6 +110,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogout = () => {
+    localStorage.removeItem('rockit_token');
+    localStorage.removeItem('rockit_token_expiry');
     setIsAuthenticated(false);
     setSnapshots([]);
   };

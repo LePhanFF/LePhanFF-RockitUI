@@ -1,104 +1,89 @@
 
 import express from 'express';
-import { Storage } from '@google-cloud/storage';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import crypto from 'crypto';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = parseInt(process.env.PORT || '8080', 10);
+const BACKEND_URL = "https://rockitapi-292122978848.us-west1.run.app";
 
-// Config
-const BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'rockit-data'; 
-
-// Initialize GCS Client
-const storage = new Storage();
-
-// --- Middleware ---
-app.use(express.json());
-
-// Request Logging for Cloud Run Debugging
-app.use((req, res, next) => {
-  // Exclude health checks or internal noise if necessary, but keep it verbose for now
-  console.log(`[WEB] ${req.method} ${req.url}`);
-  next();
-});
-
-// --- API ROUTES ---
-
-// 1. Hello / Status Check
-app.get('/api/hello', (req, res) => {
-  const sessionId = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
-  console.log(`[API] /api/hello handled. Session: ${sessionId}`);
-  res.json({ 
-    message: "System Online. Backend connection established.", 
-    sessionId,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 2. Save Journal
-app.post('/api/journal', async (req, res) => {
+// --- API PROXY MIDDLEWARE ---
+// Explicitly handles /api requests by forwarding them to the backend
+// This resolves CORS issues when running the production build
+app.use('/api', async (req, res) => {
   try {
-    const data = req.body;
-    if (!data || !data.date) {
-      return res.status(400).json({ error: 'Invalid payload: Date required' });
+    const targetUrl = `${BACKEND_URL}${req.url}`;
+    console.log(`[PROXY] ${req.method} ${targetUrl}`);
+
+    const options = {
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: new URL(BACKEND_URL).host, // Override host to match backend
+      },
+    };
+
+    // Forward body for non-GET/HEAD requests
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      // Need to capture the body stream
+      // Since we didn't parse body yet, we can pipe req directly if we used a stream-aware fetch
+      // But global fetch in Node 18+ consumes body. 
+      // For simplicity in this environment without extra deps, we read the body buffer.
+      const buffers = [];
+      for await (const chunk of req) {
+        buffers.push(chunk);
+      }
+      const data = Buffer.concat(buffers);
+      if (data.length > 0) {
+         options.body = data;
+      }
     }
+    
+    // Remove headers that might confuse the backend or fetch
+    delete options.headers['content-length'];
+    delete options.headers['connection'];
 
-    const filename = `journals/${data.date}.jsonl`;
-    const bucket = storage.bucket(BUCKET_NAME);
-    const file = bucket.file(filename);
-
-    console.log(`[API] Writing journal: ${filename}`);
-
-    await file.save(JSON.stringify(data), {
-      contentType: 'application/json',
-      metadata: { cacheControl: 'public, max-age=0' },
+    const response = await fetch(targetUrl, options);
+    
+    // Forward status and headers
+    res.status(response.status);
+    response.headers.forEach((val, key) => {
+       res.setHeader(key, val);
     });
 
-    res.status(200).json({ success: true, path: filename });
-  } catch (error) {
-    console.error('[API] Save Failed:', error);
-    res.status(500).json({ error: 'Cloud Storage Write Failed', details: error.message });
+    // Pipe response body
+    if (response.body) {
+       // Convert web stream to node stream
+       const reader = response.body.getReader();
+       while (true) {
+         const { done, value } = await reader.read();
+         if (done) break;
+         res.write(value);
+       }
+       res.end();
+    } else {
+       res.end();
+    }
+
+  } catch (err) {
+    console.error('[PROXY ERROR]', err);
+    res.status(500).json({ error: 'Proxy Request Failed', details: err.message });
   }
-});
-
-// 3. Debug Routes (Added for diagnostics)
-app.get('/debug-routes', (req, res) => {
-  const routes = app._router.stack
-    .filter(r => r.route)
-    .map(r => ({
-      path: r.route.path,
-      methods: Object.keys(r.route.methods)
-    }));
-  res.json({ routes });
-});
-
-// 4. API 404 Handler (Prevents falling through to React index.html for API calls)
-app.use('/api/*', (req, res) => {
-  console.warn(`[API] 404 Not Found: ${req.originalUrl}`);
-  res.status(404).json({ error: "API Endpoint Not Found", path: req.originalUrl });
 });
 
 // --- STATIC FILES & SPA FALLBACK ---
-
 const distPath = path.join(__dirname, 'dist');
 console.log(`[SERVER] Serving static files from: ${distPath}`);
 
-// 1. Serve static files from the 'dist' directory
 app.use(express.static(distPath));
 
-// 2. Handle SPA Fallback: 
-// Only redirect to index.html if the request is NOT an API call
+// Handle SPA Fallback
 app.get('*', (req, res) => {
-  if (req.url.startsWith('/api/')) {
-    return res.status(404).json({ error: "API route not found" });
-  }
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
 // Start Server
 app.listen(port, '0.0.0.0', () => {
-  console.log(`ROCKIT Engine Server listening on port ${port}`);
+  console.log(`Frontend Server listening on port ${port}`);
 });
